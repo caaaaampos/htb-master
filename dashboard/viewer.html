@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTB — Device Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #020304;
+  --surface: #080c10;
+  --surface2: #0d1419;
+  --border: #0f1923;
+  --border2: #162030;
+  --accent: #00ff88;
+  --accent2: #0088ff;
+  --danger: #ff2244;
+  --warn: #ff6600;
+  --white: #e8f0f8;
+  --dim: rgba(232,240,248,0.55);
+  --muted: rgba(232,240,248,0.2);
+  --mono: 'Share Tech Mono', monospace;
+  --sans: 'Rajdhani', sans-serif;
+  --glow: 0 0 18px rgba(0,255,136,0.15);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--sans);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,136,.006) 3px, rgba(0,255,136,.006) 4px);
+  pointer-events:none; z-index:999;
+}
+
+/* ── Header ── */
+.hdr {
+  height: 48px;
+  background: rgba(2,3,4,.97);
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.logo-mark {
+  width: 26px; height: 26px;
+  border: 1px solid var(--accent);
+  position: relative;
+  box-shadow: var(--glow);
+  flex-shrink: 0;
+}
+.logo-mark::before {
+  content:'';
+  position:absolute; inset:4px;
+  border: 1px solid var(--accent);
+  transform: rotate(45deg);
+  opacity:.6;
+}
+
+.logo-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  letter-spacing: .18em;
+  text-shadow: 0 0 10px rgba(0,255,136,.4);
+  white-space: nowrap;
+}
+
+.hdr-sep { width:1px; height:22px; background:var(--border2); }
+
+.hdr-stats { display:flex; gap:20px; }
+.hdr-stat {
+  display:flex; flex-direction:column; gap:1px;
+}
+.hdr-stat-val {
+  font-family:var(--mono); font-size:15px; line-height:1;
+}
+.hdr-stat-val.green { color:var(--accent); text-shadow:0 0 8px rgba(0,255,136,.4); }
+.hdr-stat-val.blue  { color:var(--accent2); }
+.hdr-stat-val.red   { color:var(--danger); }
+.hdr-stat-label { font-family:var(--mono); font-size:7px; color:var(--muted); letter-spacing:.15em; }
+
+.hdr-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+
+.cmd-wrap {
+  display:flex; align-items:center; gap:6px;
+}
+.cmd-lbl { font-family:var(--mono); font-size:8px; color:var(--accent); letter-spacing:.15em; white-space:nowrap; }
+.cmd-in {
+  background:var(--bg);
+  border:1px solid var(--border2);
+  color:var(--white);
+  font-family:var(--mono);
+  font-size:11px;
+  padding:4px 10px;
+  outline:none;
+  width:260px;
+  transition:border-color .15s;
+}
+.cmd-in:focus { border-color:var(--accent); box-shadow:var(--glow); }
+.cmd-in::placeholder { color:var(--muted); }
+
+.btn {
+  font-family:var(--mono); font-size:9px;
+  padding:5px 12px;
+  border:1px solid var(--border2);
+  background:transparent; color:var(--dim);
+  cursor:pointer; letter-spacing:.08em;
+  transition:all .15s; white-space:nowrap;
+}
+.btn:hover { border-color:var(--accent); color:var(--accent); box-shadow:var(--glow); }
+.btn-accent { border-color:var(--accent); color:var(--accent); }
+.btn-accent:hover { background:rgba(0,255,136,.08); }
+
+.ws-dot {
+  font-family:var(--mono); font-size:9px;
+  color:var(--danger); letter-spacing:.08em;
+  white-space:nowrap;
+}
+.ws-dot.on { color:var(--accent); }
+
+/* ── Node filter bar ── */
+.filter-bar {
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:6px 20px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+.filter-lbl { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:.15em; }
+.node-btn {
+  font-family:var(--mono); font-size:8px;
+  padding:3px 10px;
+  border:1px solid var(--border2);
+  background:transparent; color:var(--muted);
+  cursor:pointer; letter-spacing:.06em; transition:all .15s;
+}
+.node-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+.node-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,255,136,.06); }
+
+.cols-wrap { margin-left:auto; display:flex; align-items:center; gap:6px; }
+.cols-lbl { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:.1em; }
+.col-btn {
+  font-family:var(--mono); font-size:8px;
+  padding:2px 7px;
+  border:1px solid var(--border2);
+  background:transparent; color:var(--muted);
+  cursor:pointer; transition:all .15s;
+}
+.col-btn:hover { border-color:var(--accent); color:var(--accent); }
+.col-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,255,136,.06); }
+
+/* ── Grid ── */
+.grid-wrap {
+  flex:1;
+  overflow-y:auto;
+  padding:12px;
+  position:relative;
+  z-index:1;
+}
+.grid-wrap::-webkit-scrollbar { width:3px; }
+.grid-wrap::-webkit-scrollbar-thumb { background:var(--border2); }
+
+.device-grid {
+  display:grid;
+  gap:8px;
+  grid-template-columns: repeat(var(--cols, 5), 1fr);
+}
+
+/* ── Device cell ── */
+.dev-cell {
+  background:var(--surface);
+  border:1px solid var(--border);
+  cursor:pointer;
+  transition:border-color .2s, box-shadow .2s;
+  display:flex; flex-direction:column;
+  animation: cellIn .3s ease both;
+  position:relative;
+  overflow:hidden;
+}
+@keyframes cellIn {
+  from { opacity:0; transform:scale(.97); }
+  to   { opacity:1; transform:scale(1); }
+}
+.dev-cell:hover { border-color:var(--border2); box-shadow:0 0 12px rgba(0,255,136,.06); }
+.dev-cell.busy  { border-color:rgba(0,136,255,.35); }
+.dev-cell.offline { opacity:.35; pointer-events:none; }
+.dev-cell.selected { border-color:var(--accent); box-shadow:0 0 16px rgba(0,255,136,.12); }
+
+.cell-screen {
+  width:100%;
+  aspect-ratio: 9/16;
+  background:#000;
+  position:relative;
+  overflow:hidden;
+}
+.cell-screen img {
+  width:100%; height:100%;
+  object-fit:contain;
+  display:block;
+}
+.cell-screen canvas {
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  max-width:100%;
+  max-height:100%;
+  display:block;
+}
+.cell-no-signal {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:6px;
+}
+.no-sig-hex {
+  width:24px; height:24px;
+  border:1px solid rgba(0,255,136,.2);
+  transform:rotate(45deg);
+}
+.no-sig-txt {
+  font-family:var(--mono); font-size:7px;
+  color:rgba(0,255,136,.2); letter-spacing:.1em;
+}
+
+.cell-prog {
+  position:absolute; bottom:0; left:0; right:0;
+  height:2px; background:transparent;
+}
+.cell-prog-bar {
+  height:100%;
+  background:linear-gradient(to right, var(--accent2), var(--accent));
+  transition:width .4s ease;
+}
+
+.cell-info {
+  padding:5px 8px;
+  border-top:1px solid var(--border);
+  display:flex; align-items:center; gap:6px;
+}
+.cell-dot {
+  width:5px; height:5px; border-radius:50%; flex-shrink:0;
+}
+.cell-dot.online  { background:var(--accent); animation:blink 2s infinite; }
+.cell-dot.busy    { background:var(--accent2); }
+.cell-dot.offline { background:#333; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+.cell-name {
+  font-family:var(--mono); font-size:8px; color:var(--dim);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;
+}
+.cell-rack {
+  font-family:var(--mono); font-size:7px; color:var(--muted);
+  white-space:nowrap;
+}
+
+/* ── Fullscreen modal ── */
+.modal-bg {
+  display:none;
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.92);
+  z-index:800;
+  align-items:center; justify-content:center;
+}
+.modal-bg.open { display:flex; }
+
+.modal-box {
+  background:var(--surface);
+  border:1px solid var(--accent);
+  box-shadow:0 0 60px rgba(0,255,136,.15);
+  display:flex; flex-direction:column;
+  max-height:95vh;
+  min-width:320px;
+}
+
+.modal-hdr {
+  padding:10px 16px;
+  border-bottom:1px solid var(--border2);
+  display:flex; align-items:center; gap:12px;
+}
+.modal-title { font-family:var(--mono); font-size:11px; color:var(--accent); letter-spacing:.15em; flex:1; }
+.modal-close {
+  background:transparent; border:1px solid var(--border2);
+  color:var(--muted); font-family:var(--mono); font-size:9px;
+  padding:3px 10px; cursor:pointer; transition:all .15s;
+}
+.modal-close:hover { border-color:var(--danger); color:var(--danger); }
+
+.modal-screen {
+  flex:1;
+  background:#000;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  min-height:300px;
+}
+.modal-screen img {
+  max-width:100%; max-height:80vh;
+  object-fit:contain; display:block;
+}
+.modal-screen canvas {
+  max-width:100%; max-height:80vh;
+  display:block; margin:auto;
+}
+
+.modal-footer {
+  padding:10px 16px;
+  border-top:1px solid var(--border2);
+  display:flex; gap:8px; align-items:center;
+}
+.modal-cmd {
+  flex:1;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  color:var(--white); font-family:var(--mono); font-size:11px;
+  padding:6px 12px; outline:none; transition:border-color .15s;
+}
+.modal-cmd:focus { border-color:var(--accent); }
+.modal-cmd::placeholder { color:var(--muted); }
+
+.modal-info {
+  padding:6px 16px;
+  border-top:1px solid var(--border);
+  display:flex; gap:16px;
+}
+.mi { font-family:var(--mono); font-size:8px; color:var(--muted); }
+.mi span { color:var(--dim); }
+
+/* ── Empty state ── */
+.empty {
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  height:100%;
+  gap:12px;
+}
+.empty-hex {
+  width:48px; height:48px;
+  border:1px solid rgba(0,255,136,.15);
+  transform:rotate(45deg);
+}
+.empty-msg {
+  font-family:var(--mono); font-size:10px;
+  color:rgba(0,255,136,.2); letter-spacing:.1em;
+  text-align:center; line-height:2;
+}
+
+/* ── Toast ── */
+.toast {
+  position:fixed; bottom:20px; left:50%;
+  transform:translateX(-50%) translateY(8px);
+  background:var(--accent); color:var(--bg);
+  font-family:var(--mono); font-size:10px;
+  padding:7px 16px; opacity:0;
+  transition:all .25s; pointer-events:none; z-index:9999;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ── Select badge ── */
+.sel-count {
+  font-family:var(--mono); font-size:8px;
+  background:var(--accent); color:var(--bg);
+  padding:1px 7px; border-radius:2px;
+  display:none;
+}
+.sel-count.visible { display:inline-block; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="hdr">
+  <div class="logo-mark"></div>
+  <div class="logo-text">HTB VIEWER</div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-stats">
+    <div class="hdr-stat">
+      <div class="hdr-stat-val" id="statTotal">0</div>
+      <div class="hdr-stat-label">DEVICES</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val green" id="statOnline">0</div>
+      <div class="hdr-stat-label">ONLINE</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val blue" id="statBusy">0</div>
+      <div class="hdr-stat-label">BUSY</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val red" id="statOffline">0</div>
+      <div class="hdr-stat-label">OFFLINE</div>
+    </div>
+  </div>
+  <div class="hdr-sep"></div>
+  <div class="cmd-wrap">
+    <span class="cmd-lbl">▶ CMD</span>
+    <input class="cmd-in" id="fleetCmd" placeholder="Send task to selected devices..." onkeydown="if(event.key==='Enter')sendSelected()"/>
+  </div>
+  <span class="sel-count" id="selCount">0 selected</span>
+  <button class="btn btn-accent" onclick="sendSelected()">▶ SEND</button>
+  <button class="btn" onclick="clearSelection()">✕ CLEAR</button>
+  <div class="hdr-sep"></div>
+  <span class="ws-dot" id="wsDot">⬤ OFFLINE</span>
+  <button class="btn" onclick="refreshAll()">⟳</button>
+</div>
+
+<!-- ── Node filter bar ── -->
+<div class="filter-bar">
+  <span class="filter-lbl">RACK</span>
+  <button class="node-btn active" data-node="all" onclick="filterNode('all')">ALL</button>
+  <div id="nodeButtons"></div>
+  <div class="cols-wrap">
+    <span class="cols-lbl">COLS</span>
+    <button class="col-btn" onclick="setCols(3)">3</button>
+    <button class="col-btn active" onclick="setCols(5)">5</button>
+    <button class="col-btn" onclick="setCols(7)">7</button>
+    <button class="col-btn" onclick="setCols(10)">10</button>
+  </div>
+</div>
+
+<!-- ── Grid ── -->
+<div class="grid-wrap">
+  <div class="device-grid" id="deviceGrid" style="--cols:5"></div>
+</div>
+
+<!-- ── Fullscreen Modal ── -->
+<div class="modal-bg" id="modalBg" onclick="closeModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modalTitle">DEVICE</span>
+      <button class="modal-close" onclick="closeModal()">✕ CLOSE</button>
+    </div>
+    <div class="modal-screen" id="modalScreen">
+      <div class="cell-no-signal">
+        <div class="no-sig-hex"></div>
+        <div class="no-sig-txt">NO SIGNAL</div>
+      </div>
+    </div>
+    <div class="modal-info" id="modalInfo"></div>
+    <div class="modal-footer">
+      <input class="modal-cmd" id="modalCmd" placeholder="Send task to this device..." onkeydown="if(event.key==='Enter')sendModalTask()"/>
+      <button class="btn btn-accent" onclick="sendModalTask()">▶ RUN</button>
+      <button class="btn" id="scrcpyBtn" onclick="showScrcpy()" title="Open with scrcpy for full control">⊡ SCRCPY</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const MASTER = `${location.origin}`;  // same origin as master server
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let nodes        = {};     // nodeId → node object
+let allDevices   = [];     // flat array of { serial, name, status, task, progress, nodeId, nodeIp, nodePort }
+let filtered     = [];     // currently visible devices
+let activeFilter = 'all';
+let activeCols   = 5;
+let selected     = new Set();
+let modalSerial  = null;
+let modalNodeIp  = null;
+let modalNodePort= null;
+
+// ── ScrcpyDecoder ─────────────────────────────────────────────────────────────
+/**
+ * Opens a WebSocket to the node's /ws/scrcpy/{serial} endpoint, receives
+ * binary H.264 Annex-B packets, decodes them via WebCodecs VideoDecoder,
+ * and paints each VideoFrame onto the supplied <canvas>.
+ *
+ * Binary wire format (from server):
+ *   byte 0      : type  0=codec-config(SPS+PPS)  1=key-frame  2=delta-frame
+ *   bytes 1–8   : PTS microseconds uint64 big-endian
+ *   bytes 9+    : H.264 Annex-B payload
+ */
+class ScrcpyDecoder {
+  constructor(canvas, nodeIp, nodePort, serial) {
+    this._canvas   = canvas;
+    this._ctx      = canvas.getContext('2d');
+    this._nodeIp   = nodeIp;
+    this._nodePort = nodePort;
+    this._serial   = serial;
+    this._ws       = null;
+    this._decoder  = null;
+    this._config   = null;   // cached SPS+PPS bytes (Annex-B)
+    this._dead     = false;
+    this._retryMs  = 1500;
+    this._retryTimer = null;
+    this._connect();
+  }
+
+  _connect() {
+    if (this._dead) return;
+    const url = `ws://${this._nodeIp}:${this._nodePort}/ws/scrcpy/${encodeURIComponent(this._serial)}`;
+    try {
+      this._ws = new WebSocket(url);
+    } catch (e) {
+      this._scheduleRetry();
+      return;
+    }
+    this._ws.binaryType = 'arraybuffer';
+    this._ws.onopen    = () => { this._retryMs = 1500; };
+    this._ws.onclose   = () => { if (!this._dead) this._scheduleRetry(); };
+    this._ws.onerror   = () => {};
+    this._ws.onmessage = (ev) => {
+      if (typeof ev.data === 'string') {
+        try { this._handleText(JSON.parse(ev.data)); } catch {}
+      } else {
+        this._handleBinary(ev.data);
+      }
+    };
+  }
+
+  _scheduleRetry() {
+    clearTimeout(this._retryTimer);
+    this._retryTimer = setTimeout(() => this._connect(), this._retryMs);
+    this._retryMs = Math.min(this._retryMs * 1.5, 8000);
+  }
+
+  _handleText(msg) {
+    if (msg.type === 'meta') {
+      this._canvas.width  = msg.width  || 720;
+      this._canvas.height = msg.height || 1280;
+      this._initDecoder();
+    }
+    // 'ping' — no-op
+  }
+
+  _initDecoder() {
+    if (this._decoder) {
+      try { this._decoder.close(); } catch {}
+    }
+    this._decoder = null;
+    this._config  = null;
+
+    if (typeof VideoDecoder === 'undefined') {
+      console.warn('WebCodecs VideoDecoder not available — use Chrome 94+');
+      return;
+    }
+
+    this._decoder = new VideoDecoder({
+      output: (frame) => {
+        this._ctx.drawImage(frame, 0, 0, this._canvas.width, this._canvas.height);
+        frame.close();
+      },
+      error: (e) => {
+        console.warn(`[ScrcpyDecoder:${this._serial}] decoder error:`, e);
+        // The decoder becomes unusable after an error — reset on next key frame
+        try { this._decoder.close(); } catch {}
+        this._decoder = null;
+        this._config  = null;
+      },
+    });
+  }
+
+  _handleBinary(buf) {
+    if (!this._decoder) return;
+    const view  = new DataView(buf);
+    const ptype = view.getUint8(0);
+
+    // PTS as uint64 big-endian split into two uint32 reads (JS has no native uint64)
+    const ptsHi = view.getUint32(1, false);
+    const ptsLo = view.getUint32(5, false);
+    const pts   = ptsHi * 0x100000000 + ptsLo;  // microseconds
+
+    const payload = new Uint8Array(buf, 9);
+
+    if (ptype === 0) {
+      // Codec config: SPS + PPS in Annex-B
+      this._config = new Uint8Array(payload);
+      const codec  = this._extractCodecString(payload);
+      try {
+        this._decoder.configure({
+          codec,
+          optimizeForLatency: true,
+          // No 'description' → decoder expects Annex-B bitstream
+        });
+      } catch (e) {
+        console.warn(`[ScrcpyDecoder:${this._serial}] configure error:`, e);
+        try { this._decoder.close(); } catch {}
+        this._decoder = null;
+      }
+    } else if (ptype === 1) {
+      // Key frame (IDR): prepend cached SPS+PPS so decoder is always valid
+      if (!this._config || !this._decoder || this._decoder.state !== 'configured') return;
+      const combined = new Uint8Array(this._config.length + payload.length);
+      combined.set(this._config, 0);
+      combined.set(payload, this._config.length);
+      try {
+        this._decoder.decode(new EncodedVideoChunk({ type: 'key', timestamp: pts, data: combined }));
+      } catch (e) {
+        console.warn(`[ScrcpyDecoder:${this._serial}] key decode error:`, e);
+      }
+    } else {
+      // Delta frame (P/B)
+      if (!this._config || !this._decoder || this._decoder.state !== 'configured') return;
+      try {
+        this._decoder.decode(new EncodedVideoChunk({ type: 'delta', timestamp: pts, data: payload }));
+      } catch (e) {
+        // Silently drop bad delta frames; the next key frame will recover
+      }
+    }
+  }
+
+  /** Parse profile/level from SPS NAL unit to build an accurate codec string. */
+  _extractCodecString(data) {
+    const arr = new Uint8Array(data);
+    for (let i = 0; i + 7 < arr.length; i++) {
+      // Look for Annex-B 4-byte start code 00 00 00 01 followed by NAL type 7 (SPS)
+      if (arr[i] === 0 && arr[i+1] === 0 && arr[i+2] === 0 && arr[i+3] === 1) {
+        if ((arr[i+4] & 0x1f) === 7) {
+          const profile = arr[i+5].toString(16).padStart(2, '0');
+          const flags   = arr[i+6].toString(16).padStart(2, '0');
+          const level   = arr[i+7].toString(16).padStart(2, '0');
+          return `avc1.${profile}${flags}${level}`;
+        }
+      }
+    }
+    return 'avc1.640032';  // High Profile Level 5.0 fallback
+  }
+
+  destroy() {
+    this._dead = true;
+    clearTimeout(this._retryTimer);
+    if (this._decoder) {
+      try { this._decoder.close(); } catch {}
+      this._decoder = null;
+    }
+    if (this._ws) {
+      this._ws.onclose = null;
+      this._ws.close();
+      this._ws = null;
+    }
+  }
+}
+
+// ── Active decoder registry ──────────────────────────────────────────────────
+// grid cells keyed by serial; modal uses key '__modal__'
+const _decoders = new Map();
+
+// ── IntersectionObserver — start/stop decoders for visible cells only ────────
+const streamObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const cell   = entry.target;
+    const serial = cell.dataset.serial;
+    if (!serial) return;
+    const canvas = cell.querySelector('canvas.stream-canvas');
+    if (!canvas) return;
+
+    if (entry.isIntersecting) {
+      if (!_decoders.has(serial)) {
+        _decoders.set(serial, new ScrcpyDecoder(
+          canvas, cell.dataset.nodeip, cell.dataset.nodeport, serial
+        ));
+      }
+    } else {
+      const dec = _decoders.get(serial);
+      if (dec) { dec.destroy(); _decoders.delete(serial); }
+    }
+  });
+}, { threshold: 0.05 });
+
+// ── WebSocket to Master ───────────────────────────────────────────────────────
+let ws = null;
+let _wsToken = '';
+
+async function _fetchWsToken() {
+  // Try to get the screenwall token (requires being logged-in already).
+  // Falls back to empty string which works if the WS cookie is already set.
+  try {
+    const r = await fetch('/api/screenwall-token', { credentials: 'include' });
+    if (r.ok) { const d = await r.json(); _wsToken = d.token || ''; }
+  } catch {}
+}
+
+function initWS() {
+  const url = _wsToken
+    ? `ws://${location.host}/ws?token=${encodeURIComponent(_wsToken)}`
+    : `ws://${location.host}/ws`;
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    document.getElementById('wsDot').textContent = '⬤ LIVE';
+    document.getElementById('wsDot').className = 'ws-dot on';
+  };
+  ws.onclose = (ev) => {
+    document.getElementById('wsDot').textContent = '⬤ OFFLINE';
+    document.getElementById('wsDot').className = 'ws-dot';
+    // If closed with 4401 (unauthorized) refetch token before retry
+    if (ev.code === 4401) {
+      _fetchWsToken().then(() => setTimeout(initWS, 2000));
+    } else {
+      setTimeout(initWS, 3000);
+    }
+  };
+  ws.onmessage = async e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'init' || msg.type === 'nodes_update') {
+      // Register nodes then fetch live devices directly from each node
+      const nodeList = msg.nodes || [];
+      nodes = {};
+      nodeList.forEach(n => { nodes[n.id] = n; });
+      renderNodeButtons();
+      await Promise.all(
+        nodeList.filter(n => n.status === 'online').map(n => fetchDevicesFromNode(n))
+      );
+      buildDeviceList();
+      renderGrid();
+      updateStats();
+    } else if (msg.type === 'device_update' || msg.type === 'task_complete' || msg.type === 'task_error') {
+      updateDevice(msg);
+    }
+  };
+}
+
+function rebuildFromNodes(nodeList) {
+  nodes = {};
+  nodeList.forEach(n => { nodes[n.id] = n; });
+  buildDeviceList();
+  renderNodeButtons();
+  renderGrid();
+  updateStats();
+}
+
+function buildDeviceList() {
+  allDevices = [];
+  Object.values(nodes).forEach(n => {
+    const devs = n.device_list || {};
+    Object.values(devs).forEach(d => {
+      allDevices.push({
+        serial: d.serial,
+        name: d.name || d.serial,
+        status: d.status || 'offline',
+        task: d.task || 'idle',
+        progress: d.progress || 0,
+        nodeId: n.id,
+        nodeIp: n.ip,
+        nodePort: n.port,
+      });
+    });
+  });
+  applyFilter();
+}
+
+async function fetchDevicesFromNode(node) {
+  /** Query the node directly for its real connected devices. */
+  try {
+    const r = await fetch(`http://${node.ip}:${node.port}/api/devices`, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return;
+    const data = await r.json();
+    const liveDevices = data.devices || [];
+
+    // Merge live devices into the node's device_list
+    const existing = nodes[node.id].device_list || {};
+    liveDevices.forEach(d => {
+      const prev = existing[d.serial] || {};
+      existing[d.serial] = {
+        ...prev,
+        serial: d.serial,
+        name: d.name || prev.name || d.serial,
+        status: prev.status === 'busy' ? 'busy' : 'online',
+        task: prev.task || 'idle',
+        progress: prev.progress || 0,
+      };
+    });
+
+    // Mark devices not in live list as offline
+    Object.keys(existing).forEach(serial => {
+      if (!liveDevices.find(d => d.serial === serial)) {
+        existing[serial].status = 'offline';
+      }
+    });
+
+    nodes[node.id].device_list = existing;
+  } catch (e) {
+    // Node unreachable — mark all its devices offline
+    const devs = nodes[node.id].device_list || {};
+    Object.values(devs).forEach(d => d.status = 'offline');
+  }
+}
+
+function applyFilter() {
+  filtered = activeFilter === 'all'
+    ? [...allDevices]
+    : allDevices.filter(d => d.nodeId === activeFilter);
+}
+
+function updateDevice(msg) {
+  const d = allDevices.find(x => x.serial === msg.serial && x.nodeId === msg.node_id);
+  if (!d) return;
+  if (msg.status) d.status = msg.status;
+  if (msg.task)   d.task   = msg.task;
+  if (msg.progress != null) d.progress = msg.progress;
+  if (msg.type === 'task_complete') { d.status = 'online'; d.task = 'idle'; d.progress = 0; }
+  if (msg.type === 'task_error')    { d.status = 'online'; d.task = 'idle'; d.progress = 0; }
+  applyFilter();
+  patchCells();
+  updateStats();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderGrid() {
+  const grid = document.getElementById('deviceGrid');
+
+  // Destroy all active cell decoders and unobserve before rebuilding
+  grid.querySelectorAll('.dev-cell').forEach(c => {
+    streamObserver.unobserve(c);
+    const s = c.dataset.serial;
+    if (s && _decoders.has(s)) { _decoders.get(s).destroy(); _decoders.delete(s); }
+  });
+  grid.innerHTML = '';
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-hex"></div><div class="empty-msg">NO DEVICES DETECTED<br>Make sure nodes are online</div></div>';
+    return;
+  }
+
+  filtered.forEach((dev, idx) => {
+    const cell = document.createElement('div');
+    cell.className = `dev-cell ${dev.status}${selected.has(dev.serial) ? ' selected' : ''}`;
+    cell.dataset.serial   = dev.serial;
+    cell.dataset.nodeip   = dev.nodeIp;
+    cell.dataset.nodeport = dev.nodePort;
+    cell.style.animationDelay = `${idx * 0.02}s`;
+    cell.onclick   = (e) => {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSelect(dev.serial); }
+      else { openModal(dev); }
+    };
+
+    const prog = dev.status === 'busy' ? dev.progress : 0;
+    const offline = dev.status === 'offline';
+
+    cell.innerHTML = `
+      <div class="cell-screen">
+        <canvas class="stream-canvas" style="display:${offline ? 'none' : 'block'}"></canvas>
+        <div class="cell-no-signal" id="nosig-${dev.serial}" style="display:${offline ? 'flex' : 'none'}">
+          <div class="no-sig-hex"></div>
+          <div class="no-sig-txt">OFFLINE</div>
+        </div>
+        <div class="cell-prog">
+          <div class="cell-prog-bar" style="width:${prog}%"></div>
+        </div>
+      </div>
+      <div class="cell-info">
+        <div class="cell-dot ${dev.status}"></div>
+        <div class="cell-name" title="${esc(dev.name)}">${esc(dev.name)}</div>
+        <div class="cell-rack">${esc(dev.nodeId)}</div>
+      </div>`;
+
+    grid.appendChild(cell);
+    streamObserver.observe(cell);
+  });
+}
+
+function patchCells() {
+  filtered.forEach(dev => {
+    const cell = document.querySelector(`.dev-cell[data-serial="${dev.serial}"]`);
+    if (!cell) return;
+    cell.className = `dev-cell ${dev.status}${selected.has(dev.serial) ? ' selected' : ''}`;
+    const dot = cell.querySelector('.cell-dot');
+    if (dot) dot.className = `cell-dot ${dev.status}`;
+    const bar = cell.querySelector('.cell-prog-bar');
+    if (bar) bar.style.width = (dev.status === 'busy' ? dev.progress : 0) + '%';
+  });
+}
+
+function renderNodeButtons() {
+  const wrap = document.getElementById('nodeButtons');
+  wrap.innerHTML = '';
+  Object.values(nodes).forEach(n => {
+    const btn = document.createElement('button');
+    btn.className = `node-btn${activeFilter === n.id ? ' active' : ''}`;
+    btn.dataset.node = n.id;
+    btn.textContent = n.id;
+    btn.onclick = () => filterNode(n.id);
+    wrap.appendChild(btn);
+  });
+}
+
+function updateStats() {
+  const total   = allDevices.length;
+  const online  = allDevices.filter(d => d.status === 'online').length;
+  const busy    = allDevices.filter(d => d.status === 'busy').length;
+  const offline = allDevices.filter(d => d.status === 'offline').length;
+  document.getElementById('statTotal').textContent   = total;
+  document.getElementById('statOnline').textContent  = online;
+  document.getElementById('statBusy').textContent    = busy;
+  document.getElementById('statOffline').textContent = offline;
+}
+
+// ── Filter & Layout ───────────────────────────────────────────────────────────
+function filterNode(nodeId) {
+  activeFilter = nodeId;
+  document.querySelectorAll('.node-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.node === nodeId);
+  });
+  applyFilter();
+  renderGrid();
+}
+
+function setCols(n) {
+  activeCols = n;
+  document.getElementById('deviceGrid').style.setProperty('--cols', n);
+  document.querySelectorAll('.col-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent == n);
+  });
+}
+
+// ── Selection ─────────────────────────────────────────────────────────────────
+function toggleSelect(serial) {
+  if (selected.has(serial)) selected.delete(serial);
+  else selected.add(serial);
+  patchCells();
+  const cnt = document.getElementById('selCount');
+  cnt.textContent = selected.size + ' selected';
+  cnt.classList.toggle('visible', selected.size > 0);
+}
+
+function clearSelection() {
+  selected.clear();
+  patchCells();
+  document.getElementById('selCount').classList.remove('visible');
+}
+
+// ── Fleet command ─────────────────────────────────────────────────────────────
+async function sendSelected() {
+  const cmd = document.getElementById('fleetCmd').value.trim();
+  if (!cmd) { toast('⚠ Enter a command first'); return; }
+  if (!selected.size) { toast('⚠ Select devices first (click to open, Ctrl+click to select)'); return; }
+
+  const targets = allDevices.filter(d => selected.has(d.serial));
+  if (!confirm(`Send "${cmd}" to ${targets.length} device(s)?`)) return;
+
+  let ok = 0, fail = 0;
+  await Promise.all(targets.map(async dev => {
+    try {
+      const r = await fetch(`http://${dev.nodeIp}:${dev.nodePort}/api/run`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({serial: dev.serial, task: cmd})
+      });
+      const d = await r.json();
+      if (d.ok || r.ok) ok++; else fail++;
+    } catch { fail++; }
+  }));
+
+  document.getElementById('fleetCmd').value = '';
+  toast(`▶ ${ok} started${fail ? ` · ${fail} failed` : ''}`);
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+let _modalDecoder = null;
+
+function openModal(dev) {
+  // Destroy any previous modal decoder
+  if (_modalDecoder) { _modalDecoder.destroy(); _modalDecoder = null; }
+
+  modalSerial   = dev.serial;
+  modalNodeIp   = dev.nodeIp;
+  modalNodePort = dev.nodePort;
+
+  document.getElementById('modalTitle').textContent = `${dev.serial} — ${dev.name}`;
+  document.getElementById('modalInfo').innerHTML = `
+    <div class="mi">RACK <span>${esc(dev.nodeId)}</span></div>
+    <div class="mi">NODE <span>${dev.nodeIp}:${dev.nodePort}</span></div>
+    <div class="mi">STATUS <span style="color:${dev.status==='busy'?'var(--accent2)':dev.status==='online'?'var(--accent)':'#555'}">${dev.status.toUpperCase()}</span></div>
+    <div class="mi">TASK <span>${esc(dev.task || 'idle')}</span></div>`;
+
+  const scr = document.getElementById('modalScreen');
+  scr.innerHTML = '';
+
+  if (dev.status !== 'offline') {
+    const canvas = document.createElement('canvas');
+    scr.appendChild(canvas);
+    _modalDecoder = new ScrcpyDecoder(canvas, dev.nodeIp, dev.nodePort, dev.serial);
+  } else {
+    scr.innerHTML = '<div class="cell-no-signal"><div class="no-sig-hex"></div><div class="no-sig-txt">OFFLINE</div></div>';
+  }
+
+  document.getElementById('modalBg').classList.add('open');
+  document.getElementById('modalCmd').focus();
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modalBg')) return;
+  document.getElementById('modalBg').classList.remove('open');
+  if (_modalDecoder) { _modalDecoder.destroy(); _modalDecoder = null; }
+  document.getElementById('modalScreen').innerHTML =
+    '<div class="cell-no-signal"><div class="no-sig-hex"></div><div class="no-sig-txt">NO SIGNAL</div></div>';
+  modalSerial = null;
+}
+
+async function sendModalTask() {
+  if (!modalSerial) return;
+  const cmd = document.getElementById('modalCmd').value.trim();
+  if (!cmd) return;
+  try {
+    const r = await fetch(`http://${modalNodeIp}:${modalNodePort}/api/run`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({serial: modalSerial, task: cmd})
+    });
+    const d = await r.json();
+    toast(d.ok || r.ok ? `▶ Task started on ${modalSerial}` : '✗ ' + (d.error || 'Failed'));
+    document.getElementById('modalCmd').value = '';
+  } catch(e) { toast('✗ ' + e.message); }
+}
+
+function showScrcpy() {
+  if (!modalSerial) return;
+  const cmd = `scrcpy -s ${modalSerial} --window-title "${modalSerial}" --max-fps=60`;
+  navigator.clipboard?.writeText(cmd).then(() => {
+    toast('✓ scrcpy command copied to clipboard');
+  }).catch(() => {
+    toast(`Run: ${cmd}`);
+  });
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+async function refreshAll() {
+  try {
+    const r = await fetch(`${MASTER}/api/nodes`, {credentials:'include'});
+    const nodeList = await r.json();
+
+    // First pass: register all nodes
+    nodes = {};
+    nodeList.forEach(n => { nodes[n.id] = n; });
+    renderNodeButtons();
+
+    // Second pass: query each online node directly for live devices
+    await Promise.all(
+      nodeList
+        .filter(n => n.status === 'online')
+        .map(n => fetchDevicesFromNode(n))
+    );
+
+    buildDeviceList();
+    renderGrid();
+    updateStats();
+
+    const total = allDevices.length;
+    toast(`⟳ ${nodeList.length} rack(s) · ${total} device(s)`);
+  } catch(e) {
+    toast('✗ Could not reach master: ' + e.message);
+  }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Close modal on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal({target: document.getElementById('modalBg')});
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+_fetchWsToken().then(() => { initWS(); refreshAll(); });
+</script>
+</body>
+</html>

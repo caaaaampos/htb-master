@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTB Agent — Device Fleet</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--surface:#0a0a0a;--surface2:#111;--border:#1e1e1e;--border2:#2a2a2a;--white:#fff;--dim:rgba(255,255,255,0.6);--muted:rgba(255,255,255,0.2);--faint:rgba(255,255,255,0.05);--mono:'Share Tech Mono',monospace;--sans:'Barlow',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--white);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.01) 2px,rgba(255,255,255,.01) 4px);pointer-events:none;z-index:999}
+
+/* ── Header ── */
+.header{border-bottom:1px solid var(--border2);padding:0 32px;height:56px;display:flex;align-items:center;gap:24px;position:sticky;top:0;background:rgba(0,0,0,.97);backdrop-filter:blur(10px);z-index:100}
+.logo-box{width:28px;height:28px;border:1px solid var(--white);position:relative;overflow:hidden;flex-shrink:0}
+.logo-box::before{content:'';position:absolute;inset:3px;border:1px solid var(--white);transform:rotate(45deg)}
+.header-title{font-family:var(--mono);font-size:13px;letter-spacing:.15em}
+.sep{width:1px;height:20px;background:var(--border2)}
+.stats{display:flex;gap:20px}
+.stat{font-family:var(--mono);font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--white)}
+.dot.busy{background:#666}.dot.off{background:#333}
+.ws-badge{font-family:var(--mono);font-size:10px;padding:4px 10px;border:1px solid var(--border2);color:var(--muted)}
+.ws-badge.on{border-color:var(--white);color:var(--white)}
+.hdr-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+.btn{font-family:var(--mono);font-size:11px;padding:6px 14px;border:1px solid var(--border2);background:transparent;color:var(--dim);cursor:pointer;letter-spacing:.08em;transition:all .15s}
+.btn:hover{border-color:var(--white);color:var(--white)}
+.btn-p{border-color:var(--white);color:var(--white);background:var(--faint)}
+
+
+/* ── LLM Config Bar ── */
+.config-bar{padding:8px 32px;border-bottom:1px solid var(--border);background:#050505;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.cfg-section{display:flex;align-items:center;gap:8px}
+.cfg-label{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.15em;white-space:nowrap}
+.cfg-sep{width:1px;height:24px;background:var(--border2)}
+.provider-btns{display:flex;gap:4px}
+.pvr-btn{font-family:var(--mono);font-size:9px;padding:4px 10px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:.06em;transition:all .15s;white-space:nowrap}
+.pvr-btn:hover{border-color:#555;color:var(--dim)}
+.pvr-btn.active{border-color:var(--white);color:var(--white);background:var(--faint)}
+.cfg-model{background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:10px;padding:4px 8px;outline:none;cursor:pointer;min-width:160px}
+.cfg-key{background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:10px;padding:4px 10px;outline:none;width:220px;transition:border-color .15s}
+.cfg-key:focus{border-color:var(--white)}
+.cfg-key::placeholder{color:var(--muted)}
+.cfg-key.saved{border-color:#555}
+.cfg-save{font-family:var(--mono);font-size:9px;padding:4px 12px;border:1px solid var(--border2);background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;letter-spacing:.08em}
+.cfg-save:hover{border-color:var(--white);color:var(--white)}
+.cfg-save.ok{border-color:#fff;color:#fff}
+.cfg-status{font-family:var(--mono);font-size:9px;color:var(--muted);margin-left:4px;min-width:120px}
+.cfg-status.active{color:rgba(255,255,255,.7)}
+
+/* ── Concurrency Box ── */
+.concurrency-box{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--border2);padding:4px 10px;gap:2px;min-width:80px;background:var(--bg)}
+.concurrency-label{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.15em}
+.concurrency-controls{display:flex;align-items:center;gap:8px}
+.cc-btn{width:18px;height:18px;border:1px solid var(--border2);background:transparent;color:var(--dim);font-family:var(--mono);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:all .15s}
+.cc-btn:hover{border-color:var(--white);color:var(--white)}
+.cc-val{font-family:var(--mono);font-size:16px;color:var(--white);min-width:28px;text-align:center;letter-spacing:-.02em}
+.btn-wall{border-color:#555;color:#aaa}
+.btn-stop{border-color:#666;color:#aaa;animation:stopPulse 1.2s infinite}
+@keyframes stopPulse{0%,100%{border-color:#666;color:#aaa}50%{border-color:#fff;color:#fff}}
+.btn-wall:hover,.btn-wall.active{border-color:var(--white);color:var(--white);background:var(--faint)}
+
+/* ── Broadcast ── */
+.broadcast{padding:10px 32px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;gap:12px;align-items:center}
+.bc-label{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.12em;white-space:nowrap}
+.bc-input{flex:1;background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:12px;padding:7px 12px;outline:none;transition:border-color .15s}
+.bc-input:focus{border-color:var(--white)}
+.bc-input::placeholder{color:var(--muted)}
+.bc-select{background:var(--bg);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:11px;padding:7px 10px;outline:none;cursor:pointer}
+
+/* ── Main layout ── */
+.main{display:flex;height:calc(100vh - 56px - 48px - 46px - 32px)}
+.grid-area{flex:1;overflow-y:auto;padding:20px 28px}
+.grid-area::-webkit-scrollbar{width:3px}
+.grid-area::-webkit-scrollbar-thumb{background:var(--border2)}
+.grid-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.grid-title{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.15em;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+
+/* ── Device card ── */
+.card{background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:all .15s;animation:fi .3s ease both}
+.card:hover{border-color:var(--border2);background:var(--surface2)}
+.card.sel{border-color:var(--white)}
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.ctop{padding:12px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between}
+.cicon{width:30px;height:30px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:13px}
+.cstatus{width:7px;height:7px;border-radius:50%;margin-top:3px}
+.cstatus.online{background:var(--white);box-shadow:0 0 6px rgba(255,255,255,.5);animation:pulse 2s infinite}
+.cstatus.busy{background:#666}.cstatus.offline{background:#333}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.cbody{padding:8px 12px 12px}
+.cname{font-family:var(--mono);font-size:11px;color:var(--white);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cserial{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:8px}
+.cconn{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+.ctask{margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--dim);background:var(--faint);padding:3px 7px;border-left:2px solid var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctask.idle{border-left-color:#333;color:var(--muted)}
+.cprog{height:1px;background:var(--border);margin-top:8px;overflow:hidden}
+.cprogbar{height:100%;background:var(--white);transition:width .5s ease}
+
+/* ── Side Panel ── */
+.side{width:360px;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;flex-shrink:0}
+.shdr{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.stitle{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.15em;text-transform:uppercase}
+.sclose{width:20px;height:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
+.sclose:hover{border-color:var(--white);color:var(--white)}
+.screen-panel{border-bottom:1px solid var(--border);background:#000;display:flex;flex-direction:column}
+.screen-toolbar{padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.screen-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.stream-dot{width:6px;height:6px;border-radius:50%;background:#333}
+.stream-dot.live{background:#fff;animation:pulse 1s infinite}
+.screen-btns{display:flex;gap:6px}
+.screen-btn{font-family:var(--mono);font-size:9px;padding:3px 8px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.screen-btn:hover{border-color:var(--white);color:var(--white)}
+.screen-btn.active{border-color:var(--white);color:var(--white);background:var(--faint)}
+.screen-view{width:100%;aspect-ratio:9/16;max-height:300px;object-fit:contain;display:block;background:#000}
+.screen-placeholder{width:100%;aspect-ratio:9/16;max-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#000;color:var(--muted);font-family:var(--mono);font-size:10px}
+.sinfo{padding:12px 18px;border-bottom:1px solid var(--border)}
+.sname{font-family:var(--mono);font-size:13px;color:var(--white);margin-bottom:2px}
+.smeta{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mitem{background:var(--bg);border:1px solid var(--border);padding:6px 9px}
+.mlabel{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px}
+.mval{font-family:var(--mono);font-size:11px;color:var(--white)}
+.scmd{padding:12px 18px;border-bottom:1px solid var(--border)}
+.scmdlbl{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px}
+.sinput{width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:12px;padding:7px 10px;outline:none;margin-bottom:7px;transition:border-color .15s}
+.sinput:focus{border-color:var(--white)}
+.sinput::placeholder{color:var(--muted)}
+.srun{width:100%;padding:8px;background:var(--white);color:var(--bg);border:none;font-family:var(--mono);font-size:11px;letter-spacing:.1em;cursor:pointer;transition:opacity .15s}
+.srun:hover{opacity:.85}
+.slog{flex:1;overflow-y:auto;padding:12px 18px}
+.slog::-webkit-scrollbar{width:2px}
+.slog::-webkit-scrollbar-thumb{background:var(--border2)}
+.lentry{font-family:var(--mono);font-size:10px;line-height:1.6;padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;animation:fi .2s ease}
+.ltime{color:var(--muted);flex-shrink:0}
+.lmsg{color:var(--dim);word-break:break-word}
+.lmsg.success{color:var(--white)}.lmsg.error{color:#666}
+.sempty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted)}
+.sempty-icon{width:40px;height:40px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:4px}
+.sempty-txt{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+
+/* ── SCREEN WALL ── */
+.wall-overlay{position:fixed;inset:0;background:#000;z-index:500;display:none;flex-direction:column}
+.wall-overlay.visible{display:flex}
+.wall-header{height:48px;border-bottom:1px solid var(--border2);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;background:rgba(0,0,0,.97)}
+.wall-title{font-family:var(--mono);font-size:12px;letter-spacing:.15em}
+.wall-stats{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.wall-controls{margin-left:auto;display:flex;gap:10px;align-items:center}
+.wall-fps{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.wall-grid{flex:1;overflow:hidden;display:grid;gap:2px;padding:2px;background:var(--border)}
+.wall-cell{background:#000;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.wall-cell-hdr{position:absolute;top:0;left:0;right:0;padding:4px 8px;background:linear-gradient(to bottom,rgba(0,0,0,.8),transparent);display:flex;align-items:center;justify-content:space-between;z-index:10;opacity:0;transition:opacity .2s}
+.wall-cell:hover .wall-cell-hdr{opacity:1}
+.wall-cell-name{font-family:var(--mono);font-size:9px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wall-cell-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.wall-cell-status.online{background:#fff;animation:pulse 2s infinite}
+.wall-cell-status.busy{background:#888}
+.wall-cell-status.offline{background:#333}
+.wall-cell img{width:100%;height:100%;object-fit:contain;display:block}
+.wall-cell-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted)}
+.wall-cell-placeholder .icon{font-size:20px;opacity:.3}
+.wall-cell-placeholder .label{font-family:var(--mono);font-size:9px;opacity:.5;text-align:center;padding:0 8px}
+.wall-cell-overlay{position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:linear-gradient(to top,rgba(0,0,0,.9),transparent);font-family:var(--mono);font-size:8px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .2s}
+.wall-cell:hover .wall-cell-overlay{opacity:1}
+.wall-cell.busy-cell{outline:1px solid rgba(255,255,255,.15)}
+
+/* ── Log Panel ── */
+.log-panel{position:fixed;bottom:0;left:0;right:380px;background:rgba(0,0,0,.97);border-top:1px solid var(--border2);z-index:200;transition:height .2s ease;display:flex;flex-direction:column}
+.log-panel.collapsed{height:32px}
+.log-panel.expanded{height:200px}
+.log-panel-hdr{height:32px;padding:0 16px;display:flex;align-items:center;gap:12px;cursor:pointer;flex-shrink:0;border-bottom:1px solid var(--border)}
+.log-panel-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--dim)}
+.log-count{font-family:var(--mono);font-size:9px;background:var(--white);color:var(--bg);padding:1px 6px;border-radius:2px;min-width:18px;text-align:center}
+.log-count.hidden{display:none}
+.log-panel-btns{margin-left:auto;display:flex;gap:8px}
+.log-panel-btn{font-family:var(--mono);font-size:9px;color:var(--muted);background:transparent;border:none;cursor:pointer;padding:2px 6px}
+.log-panel-btn:hover{color:var(--white)}
+.log-body{flex:1;overflow-y:auto;padding:6px 16px}
+.log-body::-webkit-scrollbar{width:2px}
+.log-body::-webkit-scrollbar-thumb{background:var(--border2)}
+.glog-entry{font-family:var(--mono);font-size:10px;line-height:1.7;display:flex;gap:10px;border-bottom:1px solid rgba(255,255,255,.03);padding:2px 0}
+.glog-time{color:var(--muted);flex-shrink:0;font-size:9px}
+.glog-level{flex-shrink:0;font-size:9px;width:50px}
+.glog-level.INFO{color:var(--dim)}.glog-level.WARNING{color:#888}.glog-level.ERROR{color:#555}.glog-level.DEBUG{color:#333}
+.glog-msg{color:var(--dim);word-break:break-all}
+.glog-msg.ERROR{color:#777}.glog-msg.WARNING{color:#999}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--white);color:var(--bg);font-family:var(--mono);font-size:11px;padding:10px 20px;opacity:0;transition:all .3s ease;pointer-events:none;z-index:9999}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="logo-box"></div>
+    <span class="header-title">HTB AGENT // FLEET</span>
+  </div>
+  <div class="sep"></div>
+  <div class="stats">
+    <div class="stat"><div class="dot"></div><span id="cOnline">0</span> online</div>
+    <div class="stat"><div class="dot busy"></div><span id="cBusy">0</span> running</div>
+    <div class="stat"><div class="dot off"></div><span id="cOff">0</span> offline</div>
+  </div>
+  <div class="hdr-right">
+    <div class="ws-badge" id="wsBadge">⬤ OFFLINE</div>
+    <button class="btn btn-wall" id="btnWall" onclick="toggleWall()">⊞ SCREEN WALL</button>
+    <button class="btn" onclick="refreshDevices()">⟳ REFRESH</button>
+    <button class="btn btn-p" onclick="addDevice()">+ ADD DEVICE</button>
+    <button class="btn" onclick="window.open('/os-spotify','_blank')" title="Spotify Automation">♫ OS-SPOTIFY</button>
+  </div>
+</div>
+
+<!-- ── Broadcast ── -->
+<div class="broadcast">
+  <span class="bc-label">▶ BROADCAST</span>
+  <input class="bc-input" id="bcInput" placeholder="Send same command to multiple devices..." onkeydown="if(event.key==='Enter')broadcast()"/>
+  <select class="bc-select" id="bcTarget">
+    <option value="online">Online only</option>
+    <option value="all">All devices</option>
+    <option value="selected">Selected</option>
+  </select>
+
+  <!-- Concurrency box -->
+  <div style="display:flex;flex-direction:column;align-items:center;border:1px solid #2a2a2a;padding:4px 12px;background:#000;gap:2px;min-width:90px">
+    <span style="font-family:var(--mono);font-size:8px;color:rgba(255,255,255,.3);letter-spacing:.15em">PARALLEL</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button onmousedown="event.preventDefault();adjConc(-1)" type="button" style="width:30px;height:30px;border:1px solid #333;background:transparent;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;line-height:1;font-family:var(--mono);display:flex;align-items:center;justify-content:center;user-select:none">−</button>
+      <span id="ccVal" style="font-family:var(--mono);font-size:18px;color:#fff;min-width:30px;text-align:center">∞</span>
+      <button onmousedown="event.preventDefault();adjConc(1)" type="button" style="width:30px;height:30px;border:1px solid #333;background:transparent;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;line-height:1;font-family:var(--mono);display:flex;align-items:center;justify-content:center;user-select:none">+</button>
+    </div>
+    <span id="ccHint" style="font-family:var(--mono);font-size:7px;color:rgba(255,255,255,.2);letter-spacing:.08em">ALL AT ONCE</span>
+  </div>
+
+  <button class="btn btn-p" id="btnBroadcast" onclick="broadcast()">▶ SEND ALL</button>
+  <button class="btn" id="btnStop" onclick="stopAll()" style="display:none;border-color:#888;color:#fff;animation:stopPulse 1.2s infinite">⏹ STOP ALL</button>
+</div>
+
+<!-- ── LLM Config Bar ── -->
+<div class="config-bar">
+  <div class="cfg-section">
+    <span class="cfg-label">PROVIDER</span>
+    <div class="provider-btns" id="providerBtns">
+      <button class="pvr-btn active" onclick="setProvider('OpenAI')">OpenAI</button>
+      <button class="pvr-btn" onclick="setProvider('Anthropic')">Anthropic</button>
+      <button class="pvr-btn" onclick="setProvider('Ollama')">Ollama</button>
+      <button class="pvr-btn" onclick="setProvider('Groq')">Groq</button>
+      <button class="pvr-btn" onclick="setProvider('Gemini')">Gemini</button>
+    </div>
+  </div>
+  <div class="cfg-sep"></div>
+  <div class="cfg-section">
+    <span class="cfg-label">MODEL</span>
+    <select class="cfg-model" id="cfgModel" onchange="onModelChange()"></select>
+  </div>
+  <div class="cfg-sep"></div>
+  <div class="cfg-section" id="cfgKeySection">
+    <span class="cfg-label">API KEY</span>
+    <input class="cfg-key" id="cfgKey" type="password" placeholder="sk-..." onkeydown="if(event.key==='Enter')saveConfig()"/>
+  </div>
+  <div class="cfg-sep" id="cfgKeySep"></div>
+  <div class="cfg-section" id="cfgUrlSection" style="display:none">
+    <span class="cfg-label">OLLAMA URL</span>
+    <input class="cfg-key" id="cfgUrl" type="text" placeholder="http://192.168.0.10:11434" style="width:220px" onkeydown="if(event.key==='Enter')saveConfig()"/>
+  </div>
+  <div class="cfg-sep" id="cfgUrlSep" style="display:none"></div>
+  <button class="cfg-save" id="cfgSaveBtn" onclick="saveConfig()">SAVE</button>
+  <span class="cfg-status" id="cfgStatus">not saved</span>
+</div>
+
+<!-- ── Main ── -->
+<div class="main">
+  <div class="grid-area">
+    <div class="grid-hdr">
+      <span class="grid-title">CONNECTED DEVICES — <span id="total">0</span> TOTAL</span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- Side Panel -->
+  <div class="side">
+    <div class="shdr">
+      <span class="stitle">DEVICE CONTROL</span>
+      <button class="sclose" onclick="closePanel()">✕</button>
+    </div>
+    <div class="sempty" id="sempty">
+      <div class="sempty-icon">📱</div>
+      <div class="sempty-txt">Select a device</div>
+    </div>
+    <div id="scontent" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+      <div class="screen-panel">
+        <div class="screen-toolbar">
+          <div class="screen-label">
+            <div class="stream-dot" id="streamDot"></div>
+            <span id="streamLabel">SCREEN</span>
+          </div>
+          <div class="screen-btns">
+            <button class="screen-btn" id="btnStream" onclick="toggleStream()">▶ LIVE</button>
+            <button class="screen-btn" onclick="takeScreenshot()">📷 SNAP</button>
+          </div>
+        </div>
+        <img id="screenImg" class="screen-view" style="display:none" alt="Device screen"/>
+        <div class="screen-placeholder" id="screenPlaceholder">
+          <div style="font-size:24px;opacity:.3">📱</div>
+          <span>Press LIVE to stream</span>
+        </div>
+      </div>
+      <div class="sinfo">
+        <div class="sname" id="sName">—</div>
+        <div class="smeta" id="sSerial">—</div>
+        <div class="mgrid">
+          <div class="mitem"><div class="mlabel">Connection</div><div class="mval" id="sConn">—</div></div>
+          <div class="mitem"><div class="mlabel">Status</div><div class="mval" id="sStatus">—</div></div>
+          <div class="mitem"><div class="mlabel">Battery</div><div class="mval" id="sBatt">—</div></div>
+          <div class="mitem"><div class="mlabel">Android</div><div class="mval" id="sOS">—</div></div>
+        </div>
+      </div>
+      <div class="scmd">
+        <div class="scmdlbl">Run Command</div>
+        <input class="sinput" id="sInput" placeholder="e.g. Open WhatsApp and send a message" onkeydown="if(event.key==='Enter')runCmd()"/>
+        <button class="srun" onclick="runCmd()">▶ EXECUTE</button>
+      </div>
+      <div class="slog" id="sLog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCREEN WALL OVERLAY ── -->
+<div class="wall-overlay" id="wallOverlay">
+  <div class="wall-header">
+    <div class="logo-box" style="width:20px;height:20px"></div>
+    <span class="wall-title">SCREEN WALL</span>
+    <span class="wall-stats" id="wallStats">0 devices</span>
+    <div class="wall-controls">
+      <span class="wall-fps" id="wallFps">— fps</span>
+      <button class="btn" onclick="wallStartAll()" style="font-size:10px;padding:4px 10px">▶ START ALL</button>
+      <button class="btn" onclick="wallStopAll()" style="font-size:10px;padding:4px 10px">⏹ STOP ALL</button>
+      <button class="btn btn-p" onclick="toggleWall()" style="font-size:10px;padding:4px 10px">✕ CLOSE</button>
+    </div>
+  </div>
+  <div class="wall-grid" id="wallGrid"></div>
+</div>
+
+<!-- ── Log Panel ── -->
+<div class="log-panel collapsed" id="logPanel">
+  <div class="log-panel-hdr" onclick="toggleLogPanel()">
+    <span class="log-panel-title">▸ SERVER LOGS</span>
+    <span class="log-count hidden" id="logCount">0</span>
+    <div class="log-panel-btns" onclick="event.stopPropagation()">
+      <button class="log-panel-btn" onclick="clearLogs()">CLEAR</button>
+      <button class="log-panel-btn" onclick="toggleLogPanel()">↕ EXPAND</button>
+    </div>
+  </div>
+  <div class="log-body" id="logBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let devices = {};
+let selSerial = null;
+let ws = null;
+let connected = false;
+let screenWs = null;
+let streaming = false;
+
+// Wall state
+let wallOpen = false;
+let wallStreams = {};       // serial → WebSocket
+let wallFrameCount = 0;
+let wallFpsInterval = null;
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function initWS() {
+  try {
+    ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onopen = () => {
+      connected = true;
+      const b = document.getElementById('wsBadge');
+      b.textContent = '⬤ CONNECTED'; b.classList.add('on');
+      toast('⬤ Backend connected');
+      loadConfig();
+    };
+    ws.onclose = () => {
+      connected = false;
+      const b = document.getElementById('wsBadge');
+      b.textContent = '⬤ OFFLINE'; b.classList.remove('on');
+      if (!Object.keys(devices).length) loadDemo();
+      setTimeout(initWS, 3000);
+    };
+    ws.onerror = () => { if (!Object.keys(devices).length) loadDemo(); };
+    ws.onmessage = e => handle(JSON.parse(e.data));
+  } catch(err) { loadDemo(); }
+}
+
+function handle(msg) {
+  if (msg.type === 'server_log') { addLog(msg); return; }
+  if (msg.type === 'init') {
+    devices = {};
+    msg.devices.forEach(d => { devices[d.serial] = {...d, logs: d.logs||[], selected:false}; });
+    render();
+    if (wallOpen) renderWall();
+  } else if (msg.type === 'device_update') {
+    const d = devices[msg.serial];
+    if (!d) return;
+    if (msg.status) d.status = msg.status;
+    if (msg.task !== undefined) d.task = msg.task;
+    if (msg.progress !== undefined) d.progress = msg.progress;
+    if (msg.log) d.logs.push(msg.log);
+    render();
+    if (selSerial === msg.serial) openPanel(d);
+    if (wallOpen) updateWallCell(msg.serial);
+  }
+}
+
+// ── Screen Wall ───────────────────────────────────────────────────────────────
+function toggleWall() {
+  wallOpen = !wallOpen;
+  const overlay = document.getElementById('wallOverlay');
+  const btn = document.getElementById('btnWall');
+  if (wallOpen) {
+    overlay.classList.add('visible');
+    btn.classList.add('active');
+    btn.textContent = '⊞ CLOSE WALL';
+    renderWall();
+    startWallFpsCounter();
+  } else {
+    overlay.classList.remove('visible');
+    btn.classList.remove('active');
+    btn.textContent = '⊞ SCREEN WALL';
+    wallStopAll();
+    stopWallFpsCounter();
+  }
+}
+
+function renderWall() {
+  const list = Object.values(devices).filter(d => d.status !== 'offline');
+  const n = list.length || 1;
+
+  // Calculate grid columns — aim for ~16:9 aspect ratio per cell
+  const cols = Math.ceil(Math.sqrt(n * 9/16));
+  const rows = Math.ceil(n / cols);
+
+  const grid = document.getElementById('wallGrid');
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+  document.getElementById('wallStats').textContent = `${list.length} device${list.length !== 1 ? 's' : ''}`;
+
+  // Build cells
+  grid.innerHTML = list.map(d => `
+    <div class="wall-cell ${d.status === 'busy' ? 'busy-cell' : ''}" id="wc-${d.serial}" ondblclick="wallFocusDevice('${d.serial}')">
+      <div class="wall-cell-hdr">
+        <div class="wall-cell-status ${d.status}"></div>
+        <span class="wall-cell-name">${d.name}</span>
+        <button onclick="event.stopPropagation();wallToggleStream('${d.serial}')" style="font-family:var(--mono);font-size:8px;padding:2px 6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer" id="wbtn-${d.serial}">▶</button>
+      </div>
+      <img id="wimg-${d.serial}" style="width:100%;height:100%;object-fit:contain;display:none" alt="${d.name}"/>
+      <div class="wall-cell-placeholder" id="wph-${d.serial}">
+        <div class="icon">📱</div>
+        <div class="label">${d.name}<br><span style="opacity:.4">${d.serial.slice(0,12)}</span></div>
+      </div>
+      <div class="wall-cell-overlay">${d.task !== 'idle' ? '▶ ' + d.task : d.battery}</div>
+    </div>
+  `).join('');
+}
+
+function updateWallCell(serial) {
+  const d = devices[serial];
+  if (!d) return;
+  const cell = document.getElementById(`wc-${serial}`);
+  if (!cell) return;
+  const statusEl = cell.querySelector('.wall-cell-status');
+  if (statusEl) { statusEl.className = `wall-cell-status ${d.status}`; }
+  cell.className = `wall-cell ${d.status === 'busy' ? 'busy-cell' : ''}`;
+  const overlay = cell.querySelector('.wall-cell-overlay');
+  if (overlay) overlay.textContent = d.task !== 'idle' ? '▶ ' + d.task : d.battery;
+}
+
+function wallToggleStream(serial) {
+  if (wallStreams[serial]) {
+    wallStopStream(serial);
+  } else {
+    wallStartStream(serial);
+  }
+}
+
+function wallStartStream(serial) {
+  if (wallStreams[serial]) return;
+  const wsUrl = `ws://${location.host}/ws/screen/${serial}`;
+  const s = new WebSocket(wsUrl);
+
+  s.onopen = () => {
+    wallStreams[serial] = s;
+    const btn = document.getElementById(`wbtn-${serial}`);
+    if (btn) { btn.textContent = '⏹'; btn.style.color = '#fff'; btn.style.borderColor = '#fff'; }
+  };
+
+  s.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'screen_frame' && msg.serial === serial) {
+        const img = document.getElementById(`wimg-${serial}`);
+        const ph = document.getElementById(`wph-${serial}`);
+        if (img) {
+          img.src = `data:image/png;base64,${msg.frame}`;
+          img.style.display = 'block';
+        }
+        if (ph) ph.style.display = 'none';
+        wallFrameCount++;
+      }
+    } catch {}
+  };
+
+  s.onclose = () => {
+    delete wallStreams[serial];
+    const btn = document.getElementById(`wbtn-${serial}`);
+    if (btn) { btn.textContent = '▶'; btn.style.color = '#888'; btn.style.borderColor = '#333'; }
+  };
+}
+
+function wallStopStream(serial) {
+  const s = wallStreams[serial];
+  if (s) {
+    try { s.send('stop'); s.close(); } catch {}
+    delete wallStreams[serial];
+  }
+  const img = document.getElementById(`wimg-${serial}`);
+  const ph = document.getElementById(`wph-${serial}`);
+  if (img) img.style.display = 'none';
+  if (ph) ph.style.display = 'flex';
+  const btn = document.getElementById(`wbtn-${serial}`);
+  if (btn) { btn.textContent = '▶'; btn.style.color = '#888'; btn.style.borderColor = '#333'; }
+}
+
+function wallStartAll() {
+  Object.values(devices).filter(d => d.status !== 'offline').forEach(d => wallStartStream(d.serial));
+  toast(`▶ Streaming all ${Object.keys(wallStreams).length} devices`);
+}
+
+function wallStopAll() {
+  Object.keys(wallStreams).forEach(serial => wallStopStream(serial));
+  toast('⏹ All streams stopped');
+}
+
+function wallFocusDevice(serial) {
+  // Double-click on wall cell → open in side panel and close wall
+  toggleWall();
+  selectDev(serial);
+}
+
+function startWallFpsCounter() {
+  wallFrameCount = 0;
+  wallFpsInterval = setInterval(() => {
+    const fps = wallFrameCount;
+    wallFrameCount = 0;
+    document.getElementById('wallFps').textContent = `${fps} fps total`;
+  }, 1000);
+}
+
+function stopWallFpsCounter() {
+  if (wallFpsInterval) { clearInterval(wallFpsInterval); wallFpsInterval = null; }
+  document.getElementById('wallFps').textContent = '— fps';
+}
+
+// ── Side panel stream ─────────────────────────────────────────────────────────
+function toggleStream() {
+  streaming ? stopStream() : startStream();
+}
+
+function startStream() {
+  if (!selSerial) return;
+  if (!connected) { demoStream(); return; }
+  stopStream();
+  const wsUrl = `ws://${location.host}/ws/screen/${selSerial}`;
+  screenWs = new WebSocket(wsUrl);
+  screenWs.onopen = () => {
+    streaming = true;
+    document.getElementById('btnStream').textContent = '⏹ STOP';
+    document.getElementById('btnStream').classList.add('active');
+    document.getElementById('streamDot').classList.add('live');
+    document.getElementById('streamLabel').textContent = 'LIVE';
+    document.getElementById('screenPlaceholder').style.display = 'none';
+    document.getElementById('screenImg').style.display = 'block';
+  };
+  screenWs.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'screen_frame' && msg.serial === selSerial) {
+        document.getElementById('screenImg').src = `data:image/png;base64,${msg.frame}`;
+      }
+    } catch {}
+  };
+  screenWs.onclose = () => {
+    streaming = false;
+    document.getElementById('btnStream').textContent = '▶ LIVE';
+    document.getElementById('btnStream').classList.remove('active');
+    document.getElementById('streamDot').classList.remove('live');
+    document.getElementById('streamLabel').textContent = 'SCREEN';
+  };
+}
+
+function stopStream() {
+  if (screenWs) { try { screenWs.send('stop'); screenWs.close(); } catch {} screenWs = null; }
+  streaming = false;
+  document.getElementById('btnStream').textContent = '▶ LIVE';
+  document.getElementById('btnStream').classList.remove('active');
+  document.getElementById('streamDot').classList.remove('live');
+  document.getElementById('streamLabel').textContent = 'SCREEN';
+}
+
+async function takeScreenshot() {
+  if (!selSerial) return;
+  if (connected) {
+    try {
+      const res = await fetch(`/api/devices/${selSerial}/screenshot`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      document.getElementById('screenPlaceholder').style.display = 'none';
+      document.getElementById('screenImg').style.display = 'block';
+      document.getElementById('screenImg').src = url;
+      toast('📷 Screenshot captured');
+    } catch { toast('✗ Screenshot failed'); }
+  }
+}
+
+function demoStream() {
+  streaming = true;
+  document.getElementById('btnStream').textContent = '⏹ STOP';
+  document.getElementById('btnStream').classList.add('active');
+  document.getElementById('streamDot').classList.add('live');
+  document.getElementById('streamLabel').textContent = 'DEMO';
+  document.getElementById('screenPlaceholder').innerHTML = '<div style="font-size:28px;opacity:.3">📱</div><span>DEMO MODE</span>';
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function post(path, body) {
+  try {
+    const r = await fetch(path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    return r.json();
+  } catch { return null; }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const list = Object.values(devices);
+  document.getElementById('total').textContent = list.length;
+  document.getElementById('cOnline').textContent = list.filter(d=>d.status==='online').length;
+  document.getElementById('cBusy').textContent = list.filter(d=>d.status==='busy').length;
+  document.getElementById('cOff').textContent = list.filter(d=>d.status==='offline').length;
+
+  document.getElementById('grid').innerHTML = list.map((d,i) => `
+    <div class="card ${d.status} ${d.selected?'sel':''}" onclick="selectDev('${d.serial}')" style="animation-delay:${i*.03}s">
+      <div class="ctop">
+        <div class="cicon">${d.conn==='USB'?'🔌':'📶'}</div>
+        <div class="cstatus ${d.status}"></div>
+      </div>
+      <div class="cbody">
+        <div class="cname">${d.name}</div>
+        <div class="cserial">${d.serial}</div>
+        <div class="cconn">${d.conn==='USB'?'⚡':'◈'} ${d.conn} · ${d.android}</div>
+        <div class="ctask ${d.task==='idle'?'idle':''}">${d.status==='busy'?'▶ '+d.task:'— idle'}</div>
+        ${d.status==='busy'?`<div class="cprog"><div class="cprogbar" style="width:${d.progress||0}%"></div></div>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function selectDev(serial) {
+  if (selSerial === serial) { closePanel(); return; }
+  stopStream();
+  Object.values(devices).forEach(d=>d.selected=false);
+  devices[serial].selected = true;
+  selSerial = serial;
+  openPanel(devices[serial]);
+  render();
+  document.getElementById('screenImg').style.display = 'none';
+  document.getElementById('screenImg').src = '';
+  document.getElementById('screenPlaceholder').style.display = 'flex';
+  document.getElementById('screenPlaceholder').innerHTML = '<div style="font-size:24px;opacity:.3">📱</div><span>Press LIVE to stream</span>';
+}
+
+function openPanel(d) {
+  document.getElementById('sempty').style.display = 'none';
+  document.getElementById('scontent').style.display = 'flex';
+  document.getElementById('sName').textContent = d.name;
+  document.getElementById('sSerial').textContent = d.serial;
+  document.getElementById('sConn').textContent = d.conn;
+  document.getElementById('sStatus').textContent = (d.status||'').toUpperCase();
+  document.getElementById('sBatt').textContent = d.battery||'?';
+  document.getElementById('sOS').textContent = d.android||'?';
+  const log = document.getElementById('sLog');
+  log.innerHTML = (d.logs||[]).map(l=>`<div class="lentry"><span class="ltime">${l.time}</span><span class="lmsg ${l.type||''}">${l.msg}</span></div>`).join('');
+  log.scrollTop = log.scrollHeight;
+}
+
+function closePanel() {
+  stopStream();
+  selSerial = null;
+  Object.values(devices).forEach(d=>d.selected=false);
+  document.getElementById('sempty').style.display = 'flex';
+  document.getElementById('scontent').style.display = 'none';
+  render();
+}
+
+// ── Commands ──────────────────────────────────────────────────────────────────
+async function runCmd() {
+  if (!selSerial) return;
+  const cmd = document.getElementById('sInput').value.trim();
+  if (!cmd) return;
+  document.getElementById('sInput').value = '';
+  if (connected) {
+    const r = await post('/api/run', {serial: selSerial, task: cmd});
+    if (r?.error) { toast('✗ '+r.error); return; }
+    toast('▶ Running on '+devices[selSerial]?.name);
+  } else { demoRun(selSerial, cmd); }
+}
+
+
+let concurrencyVal = 0; // 0 = unlimited
+
+function adjConc(delta) {
+  concurrencyVal = Math.max(0, concurrencyVal + delta);
+  document.getElementById('ccVal').textContent = concurrencyVal === 0 ? '∞' : concurrencyVal;
+  const hint = document.getElementById('ccHint');
+  if (hint) hint.textContent = concurrencyVal === 0 ? 'ALL AT ONCE' : concurrencyVal === 1 ? 'ONE BY ONE' : `${concurrencyVal} AT A TIME`;
+}
+
+let broadcastActive = false;
+
+async function broadcast() {
+  const cmd = document.getElementById('bcInput').value.trim();
+  const target = document.getElementById('bcTarget').value;
+  const concurrency = concurrencyVal;
+  if (!cmd) return;
+  document.getElementById('bcInput').value = '';
+
+  if (connected) {
+    const sel = Object.keys(devices).filter(s=>devices[s].selected);
+    const r = await post('/api/broadcast', {task:cmd, target, serials:sel, concurrency});
+    if (!r) { toast('✗ Broadcast failed'); return; }
+    const n = r.count || 0;
+    const c = concurrency > 0 ? concurrency : n;
+    toast(`▶ Sent to ${n} devices — ${c < n ? c+' at a time' : 'all simultaneous'}`);
+    if (n > 0) setBroadcastActive(true);
+  } else {
+    const list = Object.values(devices);
+    const targets = target==='selected'?list.filter(d=>d.selected):target==='online'?list.filter(d=>d.status==='online'):list;
+    // Demo concurrency simulation
+    const queue = targets.filter(d=>d.status!=='offline');
+    const limit = concurrency > 0 ? concurrency : queue.length;
+    let running = 0, idx = 0;
+    function next() {
+      while (running < limit && idx < queue.length) {
+        demoRun(queue[idx++].serial, cmd);
+        running++;
+      }
+    }
+    next();
+    toast(`▶ Broadcast to ${queue.length} devices (${limit < queue.length ? limit+' at a time' : 'all at once'})`);
+    setBroadcastActive(true);
+  }
+}
+
+function setBroadcastActive(active) {
+  broadcastActive = active;
+  document.getElementById('btnStop').style.display = active ? 'block' : 'none';
+  document.getElementById('btnBroadcast').style.display = active ? 'none' : 'block';
+}
+
+async function stopAll() {
+  if (connected) {
+    const r = await fetch('/api/stop/all', {method:'POST'});
+    const data = await r.json();
+    toast(`⏹ Stopped ${data.count||0} tasks`);
+  } else {
+    Object.values(devices).forEach(d => {
+      if (d.status === 'busy') { d.status='online'; d.task='idle'; d.progress=0; }
+    });
+    render();
+    toast('⏹ All tasks stopped');
+  }
+  setBroadcastActive(false);
+}
+
+// Auto-hide stop button when no devices are busy
+setInterval(() => {
+  if (broadcastActive) {
+    const anyBusy = Object.values(devices).some(d => d.status === 'busy');
+    if (!anyBusy) setBroadcastActive(false);
+  }
+}, 2000);
+
+async function refreshDevices() {
+  toast('⟳ Scanning...');
+  if (connected) {
+    const r = await post('/api/devices/scan', {});
+    if (r) {
+      toast(r.new > 0 ? `⟳ ${r.devices} devices — ${r.new} new` : `⟳ ${r.devices} devices, none new`);
+    }
+  } else {
+    toast('⟳ Not connected to backend');
+  }
+}
+
+async function addDevice() {
+  const ip = prompt('IP:PORT (e.g. 192.168.1.101:5555)\nLeave empty to scan USB/OTG devices:');
+  if (ip === null) return;
+
+  if (!connected) { toast('✗ Not connected to node server'); return; }
+
+  if (ip) {
+    const r = await post('/api/devices/connect', {address: ip});
+    toast(r?.success ? '✓ Connected: ' + ip : '✗ ' + (r?.message || 'Failed'));
+  } else {
+    const r = await post('/api/devices/refresh', {});
+    const count = r?.devices?.length ?? 0;
+    toast(count > 0 ? `✓ Found ${count} device(s)` : '⚠ No USB/OTG devices detected');
+  }
+}
+
+// ── Demo ──────────────────────────────────────────────────────────────────────
+function demoRun(serial, cmd) {
+  const d = devices[serial];
+  if (!d||d.status==='offline') return;
+  d.status='busy';d.task=cmd;d.progress=8;
+  d.logs.push({time:now(),msg:`▶ ${cmd}`,type:'success'});
+  render();if(selSerial===serial)openPanel(d);
+  const iv=setInterval(()=>{
+    d.progress=Math.min(100,(d.progress||0)+Math.floor(Math.random()*12+4));
+    if(d.progress>=100){clearInterval(iv);d.status='online';d.task='idle';d.progress=0;d.logs.push({time:now(),msg:'✓ Task completed',type:'success'});}
+    render();if(selSerial===serial)openPanel(d);
+  },700);
+}
+
+function loadDemo() {
+  if (Object.keys(devices).length) return;
+  const models=['Pixel 7 Pro','Samsung S23','Pixel 6a','OnePlus 11','Xiaomi 13','Samsung A54','Pixel 8','Motorola Edge','Samsung S22','Pixel 7','Oppo Find X5','Huawei P50','Realme GT3','Nothing Phone 2','Pixel 5a','Vivo X90','Sony Xperia 5','Samsung A34','Pixel 4a','LG Velvet'];
+  models.forEach((name,i)=>{
+    const s=Math.random();const status=s>.85?'offline':s>.6?'busy':'online';
+    const serial=`DEMO-${Math.random().toString(36).slice(2,9).toUpperCase()}`;
+    devices[serial]={serial,name,conn:i<10?'USB':'WiFi',android:`Android ${11+Math.floor(Math.random()*3)}`,battery:Math.floor(Math.random()*80+20)+'%',status,task:status==='busy'?'Running task...':'idle',progress:status==='busy'?Math.floor(Math.random()*60+10):0,selected:false,logs:[{time:'--:--:--',msg:'DEMO MODE',type:''}]};
+  });
+  render();
+  toast('Demo mode — run ./start.sh for real data');
+}
+
+// ── Log Panel ─────────────────────────────────────────────────────────────────
+let logPanelOpen=false,unreadLogs=0;
+const MAX_LOGS=500;
+
+function toggleLogPanel(){
+  logPanelOpen=!logPanelOpen;
+  const p=document.getElementById('logPanel');
+  p.className='log-panel '+(logPanelOpen?'expanded':'collapsed');
+  p.querySelector('.log-panel-btn:last-child').textContent=logPanelOpen?'↕ COLLAPSE':'↕ EXPAND';
+  p.querySelector('.log-panel-title').textContent=(logPanelOpen?'▾ ':'▸ ')+'SERVER LOGS';
+  if(logPanelOpen){unreadLogs=0;document.getElementById('logCount').classList.add('hidden');document.getElementById('logBody').scrollTop=9999;}
+}
+
+function addLog(entry){
+  const body=document.getElementById('logBody');
+  const div=document.createElement('div');
+  div.className='glog-entry';
+  div.innerHTML=`<span class="glog-time">${entry.time}</span><span class="glog-level ${entry.level}">${entry.level}</span><span class="glog-msg ${entry.level}">${escHtml(entry.msg)}</span>`;
+  body.appendChild(div);
+  while(body.children.length>MAX_LOGS)body.removeChild(body.firstChild);
+  if(logPanelOpen){body.scrollTop=9999;}
+  else{unreadLogs++;const c=document.getElementById('logCount');c.textContent=unreadLogs>99?'99+':unreadLogs;c.classList.remove('hidden');}
+}
+
+function clearLogs(){document.getElementById('logBody').innerHTML='';unreadLogs=0;document.getElementById('logCount').classList.add('hidden');}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function now(){return new Date().toTimeString().slice(0,8);}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+
+// ── LLM Config ────────────────────────────────────────────────────────────────
+const PROVIDERS = {
+  OpenAI:    { models: ['gpt-4o','gpt-4o-mini','gpt-3.5-turbo','o1-mini'],           needsKey: true  },
+  Anthropic: { models: ['claude-opus-4-5','claude-sonnet-4-5','claude-haiku-4-5'],  needsKey: true  },
+  Groq:      { models: ['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768'], needsKey: true },
+  Gemini:    { models: ['gemini-2.0-flash','gemini-1.5-pro','gemini-1.5-flash'],     needsKey: true  },
+  Ollama:    { models: ['qwen2.5:14b','qwen2.5:7b','llama3.2:latest','mistral:latest','phi4:latest'], needsKey: false },
+};
+
+let currentProvider = 'OpenAI';
+
+function setProvider(name) {
+  currentProvider = name;
+  // Update button states
+  document.querySelectorAll('.pvr-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent === name);
+  });
+  // Update model dropdown
+  const sel = document.getElementById('cfgModel');
+  const models = PROVIDERS[name]?.models || [];
+  sel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+  // Show/hide API key
+  const needsKey = PROVIDERS[name]?.needsKey ?? true;
+  document.getElementById('cfgKeySection').style.display = needsKey ? 'flex' : 'none';
+  document.getElementById('cfgKeySep').style.display = needsKey ? 'block' : 'none';
+  // Show/hide Ollama URL
+  const needsUrl = name === 'Ollama';
+  document.getElementById('cfgUrlSection').style.display = needsUrl ? 'flex' : 'none';
+  document.getElementById('cfgUrlSep').style.display = needsUrl ? 'block' : 'none';
+  // Update placeholder
+  const placeholders = { OpenAI:'sk-...', Anthropic:'sk-ant-...', Groq:'gsk_...', Gemini:'AIza...' };
+  document.getElementById('cfgKey').placeholder = placeholders[name] || 'API key...';
+  document.getElementById('cfgStatus').textContent = 'unsaved changes';
+  document.getElementById('cfgStatus').className = 'cfg-status';
+}
+
+function onModelChange() {
+  document.getElementById('cfgStatus').textContent = 'unsaved changes';
+  document.getElementById('cfgStatus').className = 'cfg-status';
+}
+
+async function saveConfig() {
+  const model = document.getElementById('cfgModel').value;
+  const apiKey = document.getElementById('cfgKey').value.trim();
+  const needsKey = PROVIDERS[currentProvider]?.needsKey ?? true;
+
+  if (needsKey && !apiKey) {
+    toast('⚠ Enter an API key first');
+    document.getElementById('cfgKey').focus();
+    return;
+  }
+
+  const ollamaUrl = document.getElementById('cfgUrl')?.value?.trim() || 'http://localhost:11434';
+  const body = { provider: currentProvider, model, api_key: apiKey, ollama_url: ollamaUrl };
+
+  if (connected) {
+    const r = await post('/api/config', body);
+    if (r?.ok) {
+      document.getElementById('cfgStatus').textContent = `✓ ${currentProvider} / ${model}`;
+      document.getElementById('cfgStatus').className = 'cfg-status active';
+      document.getElementById('cfgKey').value = '';
+      document.getElementById('cfgKey').placeholder = '••••••••';
+      const btn = document.getElementById('cfgSaveBtn');
+      btn.textContent = '✓ SAVED'; btn.classList.add('ok');
+      setTimeout(() => { btn.textContent = 'SAVE'; btn.classList.remove('ok'); }, 2000);
+      toast(`✓ Using ${currentProvider} — ${model}`);
+    } else {
+      toast('✗ Failed to save config');
+    }
+  } else {
+    // Demo mode — just save locally
+    document.getElementById('cfgStatus').textContent = `✓ ${currentProvider} / ${model} (demo)`;
+    document.getElementById('cfgStatus').className = 'cfg-status active';
+    toast(`Config saved (demo) — ${currentProvider} / ${model}`);
+  }
+}
+
+async function loadConfig() {
+  if (!connected) return;
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    setProvider(cfg.provider || 'OpenAI');
+    const sel = document.getElementById('cfgModel');
+    for (const opt of sel.options) { if (opt.value === cfg.model) { opt.selected = true; break; } }
+    if (cfg.api_key) {
+      document.getElementById('cfgStatus').textContent = `✓ ${cfg.provider} / ${cfg.model}`;
+      document.getElementById('cfgStatus').className = 'cfg-status active';
+    }
+  } catch {}
+}
+
+setInterval(()=>{
+  if(connected)return;
+  Object.values(devices).forEach(d=>{if(d.status==='busy'){d.progress=Math.min(100,(d.progress||0)+Math.floor(Math.random()*6+2));if(d.progress>=100){d.status='online';d.task='idle';d.progress=0;}}});
+  render();if(selSerial&&devices[selSerial])openPanel(devices[selSerial]);
+},2000);
+
+setProvider("OpenAI");
+initWS();
+</script>
+</body>
+</html>

@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAFRUlEQVR42u2az29TRxDHZ3bf2okdR2kg0IgmTkLlKqowKpA4BQVxQvzlJCqi4sI1x1qFkPCe7fjt7uxMD5s8DKGX2MakfXuwbNmS9zPznZ82am3gOh8F1/yUACVACVAClAAlQAnw3wVQSiHidQVARO8tkZsqg1ZKT+PqIhKC397+tdFYPDk5VkpPCSOZhmy8t/V6fW/v2crKLURYXf3x1as/vPfGVJh5wsaa4DxQGL7Z3Hj0aAdABoMzRGw0FvI8Pzw8fPfu7ySpAICIfHcSUkoRea3V7m6n3W4Ph8M8tyICIM65JDGtVksp1e12RUBrPSmGiXgAEYHIrazc2tvbm5ub7/d7IsDMRB4Rk8QohYhqcbFxcnJycHDQ62XGVCcip3E9oJQKITDTvXvt3d1OCOHs7AwAQgjOOecsUUAERATAPLf1er3Vallrj4/fTySyxwKI8bqwsPD06bNms9nrZUQkLERkrXXOh8DMzBxEBFEhIhExh83NraWlpW73L+99kiTjyOnqADFe7979eX9/35hKv98TkRDYeW+tJSJmJiIRQQRmCeHcFSJgbb68vLy1tZVlWZp+HMeIVwRABGPMzs5uq/WLtdZaKyJEwTnrnAshhBCIKIQg8sm+F65ARPTeJYlpNjeq1erx8ftvWoljuqzX6y9evDDG9Hp9EfHe53nunCMK9NnxI8+DtS7Ph0TELGn6cXn5h+fPnxtz9USSXE08AEBEg8Hg/v179Xrt7du30cxEFAKHkQMAIiDCIszMWmtE7Pf7lUql3W43m+tHR0fjxMBYldh7n6bZ6upqtVp9/frPwWBgjPHeM/PnAMKsmUVrQcRer3fjxvLDhw/n5+fTNI2fmUEzJyJR/Wn6sVarPXny+ObNm2maMgci8t4Xj+fqCYGIsixbX1/rdDoAkGWZtdY5N05Nu7oHmLnfH8R48H6gFD548Fuj0Xjz5s1FmPrCA4g4HA6NMTs7j+7c+anf70fZiMjZ2dk4vcVYErLWRk0rpQAgz/Nms9loNF6+fNnr9SqVChHFcpGm6e3btx8//n1+fv709FQpjMUOUTnnAWZRB5Ik2djYRETnbAgsIiI8HOZzc9XNzc0sy7rdrtY61ubt7e1OZ5eIhsMcQEII1jrnHIAMBoOjoyNm+dYeEBHnrNaKmQG8Uqh1ohR67xBVp7O7tLR0eHhgjNnf319bW0vTDEAAUISJggiLQAjBezebeUBErHVKKWZGVACCiFprpTQiWJs3m+v1ei1JzOLi4ocPH5TSIhJLXFS8iGitnfMzA3DOIqIIA2DRliWJ1lqLQJ7ntVqNWU5PT5VSAD4ECoGLSnIB4GZTB0TAWhclAYCxQiOitYKIxpgk0Xmexw7COeu9L6p44QGllHOzkRACSGyBYpaMDZKIRBAiX6lUY4/gnHPOhUAxUuOHI0QEmJUHzgGYWSlVkCilkkQDCLMwc2yTLupylJAgqpl74BwgXjGaMAZxHBeZJUnAORtTTQFAFGKLGvV24QGYVQzYouFRSsXRZPQw61iwPt394jBzBPZ+rEI2ViXO8zyKpzD85XPRon79jMb0DEbKOC9e6rQ/uxFz+Pf7B+99dONsAKISLktrdPPzxXgQwiee2K7G9DqzrUTMQkUmvTz3xNlgdEKLw0K8+pjDwGQWW5Hhq0ue+NZoDMSXzrk4739Hm7kin37hii9iYFKGn8p2ejTzFBIajYF4+8nudye8Xi9ComgZihiIsrkevw+MhgQzT8PwU1mvX14fxdoce4dpfUv5f6ESoAQoAUqAEqAEKAFKgBKgBPjfAvwDnuAsAu/yAtkAAAAASUVORK5CYII="/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTB MASTER — Fleet Command</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #020304;
+  --surface: #080c10;
+  --surface2: #0d1419;
+  --border: #0f1923;
+  --border2: #162030;
+  --accent: #00ff88;
+  --accent2: #0088ff;
+  --warn: #ff6600;
+  --danger: #ff2244;
+  --white: #e8f0f8;
+  --dim: rgba(232,240,248,0.5);
+  --muted: rgba(232,240,248,0.2);
+  --faint: rgba(232,240,248,0.04);
+  --mono: 'Share Tech Mono', monospace;
+  --sans: 'Rajdhani', sans-serif;
+  --glow: 0 0 20px rgba(0,255,136,0.15);
+  --glow2: 0 0 20px rgba(0,136,255,0.15);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,136,0.008) 3px, rgba(0,255,136,0.008) 4px);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* Grid background */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Header ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(2,3,4,0.97);
+  border-bottom: 1px solid var(--border2);
+  backdrop-filter: blur(20px);
+  padding: 0 32px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-mark {
+  width: 32px; height: 32px;
+  border: 1px solid var(--accent);
+  position: relative;
+  box-shadow: var(--glow);
+}
+.logo-mark::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1px solid var(--accent);
+  transform: rotate(45deg);
+  opacity: 0.6;
+}
+.logo-mark::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(0,255,136,0.1), transparent 70%);
+}
+
+.logo-text {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: .2em;
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(0,255,136,0.5);
+}
+
+.logo-sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: .3em;
+  margin-top: 2px;
+}
+
+.header-sep { width: 1px; height: 28px; background: var(--border2); }
+
+/* Global stats in header */
+.hdr-stats {
+  display: flex;
+  gap: 28px;
+}
+
+.hdr-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hdr-stat-val {
+  font-family: var(--mono);
+  font-size: 18px;
+  color: var(--white);
+  line-height: 1;
+}
+
+.hdr-stat-val.green { color: var(--accent); text-shadow: 0 0 8px rgba(0,255,136,0.4); }
+.hdr-stat-val.blue { color: var(--accent2); text-shadow: 0 0 8px rgba(0,136,255,0.4); }
+.hdr-stat-val.orange { color: var(--warn); }
+.hdr-stat-val.red { color: var(--danger); }
+
+.hdr-stat-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.hdr-right {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.clock {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  letter-spacing: .1em;
+}
+
+.btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 6px 14px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  letter-spacing: .1em;
+  transition: all .15s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--glow); }
+.btn-accent { border-color: var(--accent); color: var(--accent); }
+.btn-accent:hover { background: rgba(0,255,136,0.08); }
+
+/* ── Command Bar ── */
+.cmd-bar {
+  padding: 10px 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+}
+
+.cmd-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: .2em;
+  white-space: nowrap;
+}
+
+.cmd-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 14px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.cmd-input:focus { border-color: var(--accent); box-shadow: var(--glow); }
+.cmd-input::placeholder { color: var(--muted); }
+
+.rack-select {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 7px 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Concurrency */
+.rack-sel-btn {
+  font-size:8px; padding:3px 10px; margin-left:4px;
+  border-color: rgba(255,255,255,.15); color: rgba(255,255,255,.3);
+  transition: all .15s;
+}
+.rack-sel-btn:hover { border-color: var(--accent); color: var(--accent); }
+.rack-sel-active { border-color: var(--accent) !important; color: var(--accent) !important; background: rgba(0,255,136,.08) !important; }
+.rack.sel { border-color: rgba(0,255,136,.35) !important; box-shadow: 0 0 0 1px rgba(0,255,136,.15); }
+
+
+/* ── Notifications ─────────────────────────────────────────────────────────── */
+.notif-bell{position:relative;cursor:pointer;padding:4px 8px;border:1px solid var(--border2);font-size:13px;transition:all .15s;user-select:none}
+.notif-bell:hover{border-color:var(--accent)}
+.notif-badge{position:absolute;top:-5px;right:-5px;background:#ff3250;color:#fff;font-size:7px;font-family:var(--mono);width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;display:none}
+.notif-badge.visible{display:flex}
+.notif-panel{position:fixed;top:54px;right:12px;width:320px;background:#0a0a0a;border:1px solid rgba(0,255,136,.2);z-index:500;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+.notif-panel.open{display:flex}
+.notif-hdr{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:8px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em}
+.notif-hdr span{flex:1}
+.notif-clear{cursor:pointer;color:rgba(0,255,136,.3);font-size:7px}
+.notif-clear:hover{color:var(--accent)}
+.notif-list{max-height:360px;overflow-y:auto}
+.notif-list::-webkit-scrollbar{width:2px}
+.notif-list::-webkit-scrollbar-thumb{background:rgba(0,255,136,.15)}
+.notif-item{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:8px;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.notif-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.notif-dot.done{background:var(--accent)}
+.notif-dot.error{background:#ff3250}
+.notif-dot.info{background:#44aaff}
+.notif-body{flex:1}
+.notif-title{font-size:9px;color:var(--white);font-family:var(--mono)}
+.notif-sub{font-size:8px;color:var(--muted);margin-top:1px}
+.notif-time{font-size:7px;color:rgba(255,255,255,.15);flex-shrink:0}
+.notif-empty{padding:20px;text-align:center;font-size:8px;color:var(--muted)}
+.notif-settings{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;font-size:8px;color:var(--muted);font-family:var(--mono)}
+.notif-toggle{display:flex;align-items:center;gap:5px;cursor:pointer}
+.ntoggle{width:24px;height:12px;border:1px solid var(--border2);border-radius:6px;position:relative;transition:background .15s}
+.ntoggle.on{background:rgba(0,255,136,.2);border-color:var(--accent)}
+.ntoggle::after{content:'';position:absolute;width:8px;height:8px;background:rgba(255,255,255,.3);border-radius:50%;top:1px;left:1px;transition:all .15s}
+.ntoggle.on::after{left:13px;background:var(--accent)}
+
+/* ── Export button ─────────────────────────────────────────────────────────── */
+.export-btn{font-family:var(--mono);font-size:8px;padding:3px 10px;border:1px solid rgba(0,255,136,.2);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:.07em;transition:all .15s}
+.export-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,255,136,.05)}
+
+.conc-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid var(--border2);
+  padding: 3px 10px;
+  background: var(--bg);
+  gap: 1px;
+  min-width: 80px;
+}
+.conc-label { font-family: var(--mono); font-size: 7px; color: var(--muted); letter-spacing: .15em; }
+.conc-controls { display: flex; align-items: center; gap: 8px; }
+.conc-btn {
+  width: 26px; height: 26px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--dim);
+  font-size: 16px;
+  cursor: pointer;
+  font-family: var(--mono);
+  line-height: 1;
+  transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.conc-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,255,136,.06); }
+.conc-btn:active { background: rgba(0,255,136,.12); }
+.conc-val { font-family: var(--mono); font-size: 18px; color: var(--white); min-width: 32px; text-align: center; font-weight: bold; }
+
+.btn-send {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 7px 18px;
+  border: 1px solid var(--accent);
+  background: rgba(0,255,136,0.08);
+  color: var(--accent);
+  cursor: pointer;
+  letter-spacing: .1em;
+  transition: all .15s;
+}
+.btn-send:hover { background: rgba(0,255,136,0.18); box-shadow: var(--glow); }
+
+.btn-stop {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 7px 18px;
+  border: 1px solid var(--danger);
+  background: rgba(255,34,68,0.08);
+  color: var(--danger);
+  cursor: pointer;
+  letter-spacing: .1em;
+  display: none;
+  animation: stopPulse 1.2s infinite;
+}
+@keyframes stopPulse {
+  0%,100% { box-shadow: none; }
+  50% { box-shadow: 0 0 12px rgba(255,34,68,0.4); }
+}
+
+/* ── Main layout ── */
+.main {
+  display: flex;
+  height: calc(100vh - 60px - 50px - 36px);
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Rack Grid ── */
+.racks-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.racks-area::-webkit-scrollbar { width: 3px; }
+.racks-area::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.section-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: .25em;
+}
+.section-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--border2), transparent);
+}
+
+/* Rack card */
+.rack {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: border-color .2s;
+  animation: rackIn .4s ease both;
+}
+.rack:hover { border-color: var(--border2); }
+.rack.sel { border-color: rgba(0,255,136,0.3); box-shadow: 0 0 20px rgba(0,255,136,0.05); }
+@keyframes rackIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+.rack-hdr {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rack-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: .15em;
+  min-width: 70px;
+}
+
+.rack-name {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--white);
+  letter-spacing: .05em;
+}
+
+.rack-ip {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.rack-stats {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.rack-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.rst-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.rst-dot.on { background: var(--accent); box-shadow: 0 0 6px rgba(0,255,136,0.6); animation: blink 2s infinite; }
+.rst-dot.busy { background: var(--accent2); box-shadow: 0 0 6px rgba(0,136,255,0.6); }
+.rst-dot.off { background: #333; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.rst-val { color: var(--white); }
+.rst-lbl { color: var(--muted); font-size: 9px; }
+
+/* Progress bar in rack header */
+.rack-prog-wrap {
+  width: 120px;
+  height: 3px;
+  background: var(--border2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.rack-prog-bar {
+  height: 100%;
+  background: linear-gradient(to right, var(--accent2), var(--accent));
+  border-radius: 2px;
+  transition: width .5s ease;
+}
+
+.rack-toggle {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 8px;
+  transition: transform .2s;
+}
+.rack.expanded .rack-toggle { transform: rotate(180deg); }
+
+/* Device mini-grid inside rack */
+.rack-body {
+  display: none;
+  padding: 12px 16px;
+  gap: 8px;
+}
+.rack.expanded .rack-body { display: flex; flex-wrap: wrap; }
+
+.dev-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all .15s;
+  min-width: 140px;
+}
+.dev-chip:hover { border-color: var(--border2); background: var(--surface2); }
+.dev-chip.busy { border-color: rgba(0,136,255,0.3); }
+.dev-chip.offline { opacity: .4; }
+
+.dev-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.dev-dot.online { background: var(--accent); animation: blink 2s infinite; }
+.dev-dot.busy { background: var(--accent2); }
+.dev-dot.offline { background: #333; }
+
+.dev-name { font-family: var(--mono); font-size: 9px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+.dev-task { font-family: var(--mono); font-size: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+
+/* ── Side Panel ── */
+.side {
+  width: 340px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.side-hdr {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.side-title { font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: .2em; }
+
+.side-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.side-tab {
+  flex: 1;
+  padding: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  letter-spacing: .1em;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+}
+.side-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.side-tab:hover { color: var(--dim); }
+
+.side-content { flex: 1; overflow-y: auto; }
+.side-content::-webkit-scrollbar { width: 2px; }
+.side-content::-webkit-scrollbar-thumb { background: var(--border2); }
+
+/* Activity feed */
+.feed-entry {
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: feedIn .2s ease;
+}
+@keyframes feedIn { from { opacity:0; transform:translateX(-4px); } to { opacity:1; transform:translateX(0); } }
+
+.feed-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.feed-dot.success { background: var(--accent); }
+.feed-dot.running { background: var(--accent2); animation: blink 1s infinite; }
+.feed-dot.error { background: var(--danger); }
+.feed-dot.info { background: var(--muted); }
+
+.feed-body { flex: 1; }
+.feed-rack { font-family: var(--mono); font-size: 8px; color: var(--accent); letter-spacing: .1em; }
+.feed-msg { font-family: var(--mono); font-size: 10px; color: var(--dim); word-break: break-word; line-height: 1.5; }
+.feed-time { font-family: var(--mono); font-size: 8px; color: var(--muted); margin-top: 2px; }
+
+/* Stats tab */
+.hist-table { width:100%; border-collapse:collapse; font-size:8px; }
+.hist-table th { padding:5px 8px; text-align:left; color:var(--muted); border-bottom:1px solid var(--border); font-family:var(--mono); letter-spacing:.1em; font-weight:normal; }
+.hist-table td { padding:5px 8px; border-bottom:1px solid rgba(255,255,255,.04); font-family:var(--mono); vertical-align:top; }
+.hist-table tr:hover td { background:rgba(255,255,255,.02); }
+.h-status { display:inline-block; padding:1px 5px; font-size:7px; border-radius:2px; }
+.h-status.done    { background:rgba(0,255,136,.12); color:var(--accent); }
+.h-status.error   { background:rgba(255,50,80,.12); color:#ff3250; }
+.h-status.running { background:rgba(0,170,255,.12); color:#44aaff; animation:pulse 1s infinite; }
+.hist-filters { display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:center; }
+.hist-filter-btn { font-size:7px; padding:2px 8px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; font-family:var(--mono); }
+.hist-filter-btn.active { border-color:var(--accent); color:var(--accent); }
+.hist-stats-row { display:flex; gap:0; border-bottom:1px solid var(--border); }
+.hsr { flex:1; padding:8px; text-align:center; border-right:1px solid var(--border); }
+.hsr:last-child { border-right:none; }
+.hsr-val { font-family:var(--mono); font-size:16px; color:var(--white); }
+.hsr-val.green { color:var(--accent); }
+.hsr-val.red   { color:#ff3250; }
+.hsr-val.blue  { color:#44aaff; }
+.hsr-label { font-size:6px; color:var(--muted); letter-spacing:.1em; margin-top:1px; }
+
+.stat-grid {
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.stat-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+}
+.stat-card-val { font-family: var(--mono); font-size: 22px; color: var(--white); }
+.stat-card-val.green { color: var(--accent); }
+.stat-card-val.blue { color: var(--accent2); }
+.stat-card-val.orange { color: var(--warn); }
+.stat-card-label { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: .12em; margin-top: 4px; }
+
+.rack-breakdown {
+  padding: 0 18px 16px;
+}
+.rack-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rack-row-id { font-family: var(--mono); font-size: 9px; color: var(--accent); min-width: 55px; }
+.rack-row-bar-wrap { flex: 1; height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.rack-row-bar { height: 100%; background: linear-gradient(to right, var(--accent2), var(--accent)); border-radius: 2px; transition: width .5s ease; }
+.rack-row-pct { font-family: var(--mono); font-size: 9px; color: var(--dim); min-width: 36px; text-align: right; }
+
+/* ── Log Panel ── */
+.log-panel {
+  position: fixed; bottom: 0; left: 0; right: 340px;
+  background: rgba(2,3,4,0.98);
+  border-top: 1px solid var(--border2);
+  z-index: 200;
+  transition: height .2s ease;
+  display: flex;
+  flex-direction: column;
+}
+.log-panel.collapsed { height: 36px; }
+.log-panel.expanded { height: 200px; }
+.log-hdr {
+  height: 36px; padding: 0 18px;
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.log-title { font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: .15em; }
+.log-count {
+  font-family: var(--mono); font-size: 8px;
+  background: var(--accent); color: var(--bg);
+  padding: 1px 6px; border-radius: 2px; min-width: 18px; text-align: center;
+}
+.log-count.hidden { display: none; }
+.log-btns { margin-left: auto; display: flex; gap: 8px; }
+.log-btn { font-family: var(--mono); font-size: 8px; color: var(--muted); background: transparent; border: none; cursor: pointer; }
+.log-btn:hover { color: var(--accent); }
+.log-body { flex: 1; overflow-y: auto; padding: 6px 18px; }
+.log-body::-webkit-scrollbar { width: 2px; }
+.log-body::-webkit-scrollbar-thumb { background: var(--border2); }
+.log-entry {
+  font-family: var(--mono); font-size: 10px; line-height: 1.7;
+  display: flex; gap: 10px;
+  border-bottom: 1px solid rgba(0,255,136,0.03);
+  padding: 1px 0;
+}
+.log-time { color: var(--muted); flex-shrink: 0; font-size: 9px; }
+.log-rack { color: var(--accent); flex-shrink: 0; font-size: 9px; min-width: 55px; }
+.log-msg { color: rgba(232,240,248,0.5); word-break: break-all; }
+.log-msg.err { color: var(--danger); }
+.log-msg.ok { color: var(--accent); }
+
+.toast {
+  position: fixed; bottom: 44px; left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--accent); color: var(--bg);
+  font-family: var(--mono); font-size: 11px;
+  padding: 8px 18px; opacity: 0;
+  transition: all .25s ease; pointer-events: none; z-index: 9999;
+  letter-spacing: .05em;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">HTB MASTER</div>
+      <div class="logo-sub">FLEET COMMAND CENTER</div>
+    </div>
+  </div>
+  <div class="header-sep"></div>
+  <div class="hdr-stats">
+    <div class="hdr-stat">
+      <div class="hdr-stat-val" id="totalRacks">0</div>
+      <div class="hdr-stat-label">RACKS</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val green" id="totalOnline">0</div>
+      <div class="hdr-stat-label">ONLINE</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val blue" id="totalBusy">0</div>
+      <div class="hdr-stat-label">RUNNING</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val orange" id="totalOffline">0</div>
+      <div class="hdr-stat-label">OFFLINE</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="hdr-stat-val" id="totalDevices">0</div>
+      <div class="hdr-stat-label">TOTAL DEVICES</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span id="wsIndicator" style="font-family:var(--mono);font-size:10px;color:var(--danger);letter-spacing:.1em">⬤ OFFLINE</span>
+    <div class="header-sep"></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="header-sep"></div>
+    <button class="btn" onclick="window.open('/viewer','_blank')">⊡ LIVE VIEWER</button>
+    <button class="btn" onclick="addRack()">+ ADD RACK</button>
+    <button class="btn btn-accent" onclick="scanAll()">⟳ SCAN ALL</button>
+    <button class="btn" onclick="resetRegistry()" style="border-color:#ff4466;color:#ff4466" title="Clear all registered nodes">✕ RESET REGISTRY</button>
+  </div>
+</div>
+
+<!-- ── Command Bar ── -->
+<div class="cmd-bar">
+  <span class="cmd-label">▶ FLEET CMD</span>
+  <input class="cmd-input" id="cmdInput" placeholder="Command to broadcast to all racks... e.g. 'open Facebook and like first post'" onkeydown="if(event.key==='Enter')sendFleet()"/>
+  <select class="rack-select" id="rackTarget" onchange="onTargetChange()">
+    <option value="all">All racks</option>
+    <option value="online">Online only</option>
+    <option value="selected">Selected racks</option>
+  </select>
+  <div id="selHint" style="display:none;font-size:8px;color:var(--accent);font-family:var(--mono);letter-spacing:.08em;white-space:nowrap">
+    <span id="selCount">0</span> racks selected
+    <span style="color:rgba(0,255,136,.3);cursor:pointer;margin-left:6px" onclick="clearSelection()">✕ clear</span>
+  </div>
+  <div class="conc-box">
+    <div class="conc-label">PARALLEL/RACK</div>
+    <div class="conc-controls">
+      <button class="conc-btn" onmousedown="event.preventDefault();adjConc(-1)" type="button">−</button>
+      <div class="conc-val" id="concVal">∞</div>
+      <button class="conc-btn" onmousedown="event.preventDefault();adjConc(1)" type="button">+</button>
+    </div>
+    <div id="concHint" style="font-size:7px;color:rgba(0,255,136,.3);text-align:center;margin-top:1px;letter-spacing:.05em">ALL AT ONCE</div>
+  </div>
+  <button class="btn-send" id="btnSend" onclick="sendFleet()">▶ SEND FLEET</button>
+  <button class="btn-stop" id="btnStop" onclick="stopFleet()">⏹ STOP ALL</button>
+</div>
+
+<!-- ── Main ── -->
+<div class="main">
+
+  <!-- Racks area -->
+  <div class="racks-area" id="racksArea">
+    <div class="section-hdr">
+      <span class="section-title">RACK INVENTORY</span>
+      <div class="section-line"></div>
+    </div>
+    <!-- Racks rendered here -->
+  </div>
+
+  <!-- Side Panel -->
+  <div class="side">
+    <div class="side-hdr">
+      <span class="side-title">FLEET INTEL</span>
+    </div>
+    <div class="side-tabs">
+      <button class="side-tab active" onclick="switchTab('feed')">ACTIVITY</button>
+      <button class="side-tab" onclick="switchTab('stats')">STATS</button>
+      <button class="side-tab" onclick="switchTab('nodes')">NODES</button>
+      <button class="side-tab" onclick="switchTab('history')">HISTORY</button>
+    </div>
+    <div class="side-content" id="sideContent">
+      <!-- Feed tab -->
+      <div id="tabFeed"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Log Panel ── -->
+<div class="log-panel collapsed" id="logPanel">
+  <div class="log-hdr" onclick="toggleLog()">
+    <span class="log-title">▸ MASTER LOG</span>
+    <span class="log-count hidden" id="logCount">0</span>
+    <div class="log-btns" onclick="event.stopPropagation()">
+      <button class="log-btn" onclick="clearLog()">CLEAR</button>
+      <button class="log-btn" id="logToggleBtn" onclick="toggleLog()">↕ EXPAND</button>
+    </div>
+  </div>
+  <div class="log-body" id="logBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+
+// ── Real WebSocket to Master Server ──────────────────────────────────────────
+let masterWs = null;
+let wsConnected = false;
+
+function initWS() {
+  try {
+    masterWs = new WebSocket(`ws://${location.host}/ws`);
+
+    masterWs.onopen = () => {
+      wsConnected = true;
+      document.getElementById('wsIndicator').textContent = '⬤ MASTER ONLINE';
+      document.getElementById('wsIndicator').style.color = 'var(--accent)';
+      addFeed('success', 'MASTER', '⬤ Connected to master server');
+    };
+
+    masterWs.onclose = () => {
+      wsConnected = false;
+      document.getElementById('wsIndicator').textContent = '⬤ OFFLINE';
+      document.getElementById('wsIndicator').style.color = 'var(--danger)';
+      setTimeout(initWS, 3000);
+    };
+
+    masterWs.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'init' || msg.type === 'nodes_update') {
+        // Rebuild racks from server nodes
+        const serverNodes = msg.nodes || [];
+        serverNodes.forEach(node => {
+          const existing = racks[node.id] || {};
+          racks[node.id] = {
+            ...existing,
+            id: node.id,
+            name: node.name,
+            ip: node.ip,
+            port: node.port,
+            status: node.status === 'online' ? 'connected' : 'disconnected',
+            hostname: node.hostname,
+            last_seen: node.last_seen,
+            devices: existing.devices || {},
+            selected: existing.selected || false,
+            expanded: existing.expanded || false,
+          };
+          // Update device count placeholder
+          if (node.devices > 0 && Object.keys(racks[node.id].devices).length === 0) {
+            for (let i = 0; i < node.devices; i++) {
+              const s = `${node.id}-DEV-${String(i+1).padStart(3,'0')}`;
+              racks[node.id].devices[s] = { serial: s, name: `Device #${i+1}`, status: 'online', task: 'idle', progress: 0 };
+            }
+          }
+        });
+        renderAll();
+      } else if (msg.type === 'node_registered') {
+        addFeed('success', msg.node.id, `✓ New node online: ${msg.node.hostname}`);
+      } else if (msg.type === 'device_update') {
+        const rack = racks[msg.node_id];
+        if (rack && msg.serial) {
+          rack.devices[msg.serial] = { ...(rack.devices[msg.serial]||{serial:msg.serial}), ...msg };
+          renderAll();
+        }
+      } else if (msg.type === 'task_complete') {
+        const rack = racks[msg.node_id];
+        const devName = rack?.devices?.[msg.serial]?.name || msg.serial || 'device';
+        if (rack && msg.serial) {
+          rack.devices[msg.serial] = { ...(rack.devices[msg.serial]||{}), status:'online', task:'idle', progress:0 };
+          renderAll();
+        }
+        addFeed('success', msg.node_id||'NODE', `✓ ${devName} — task complete`);
+        pushNotif('done', `✓ Task complete`, `${msg.node_id} · ${devName}`);
+        checkFleetDone();
+      } else if (msg.type === 'task_error') {
+        const rack = racks[msg.node_id];
+        const devName = rack?.devices?.[msg.serial]?.name || msg.serial || 'device';
+        if (rack && msg.serial) {
+          rack.devices[msg.serial] = { ...(rack.devices[msg.serial]||{}), status:'online', task:'idle', progress:0 };
+          renderAll();
+        }
+        addFeed('error', msg.node_id||'NODE', `✗ ${devName} — ${msg.error||'error'}`);
+        pushNotif('error', `✗ Task failed`, `${msg.node_id} · ${devName}: ${(msg.error||'').slice(0,60)}`);
+      } else if (msg.type === 'device_connected') {
+        const rack = racks[msg.node_id];
+        if (rack && msg.serial) {
+          rack.devices[msg.serial] = { serial:msg.serial, name:msg.name||msg.serial, status:'online', task:'idle', progress:0 };
+          renderAll();
+        }
+        addFeed('success', msg.node_id||'NODE', `⬆ ${msg.serial} connected`);
+      } else if (msg.type === 'device_disconnected') {
+        const rack = racks[msg.node_id];
+        if (rack && msg.serial) {
+          if (rack.devices[msg.serial]) rack.devices[msg.serial].status = 'offline';
+          renderAll();
+        }
+        addFeed('error', msg.node_id||'NODE', `⬇ ${msg.serial} disconnected`);
+      } else if (msg.type === 'fleet_started') {
+        addFeed('running', 'MASTER', `▶ Fleet: "${msg.task}" → ${msg.nodes} nodes / ${msg.devices} devices`);
+        setBroadcastActive(true);
+      } else if (msg.type === 'fleet_stopped') {
+        addFeed('info', 'MASTER', '⏹ Fleet stopped');
+        setBroadcastActive(false);
+      }
+    };
+  } catch(e) {
+    console.log('WS connection failed — retrying...');
+  }
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+let notifs = [];
+let notifSoundOn = true;
+let notifVisualOn = true;
+let notifPanelOpen = false;
+let fleetTasksTotal = 0;
+let fleetTasksDone  = 0;
+
+function pushNotif(type, title, sub) {
+  const n = { type, title, sub, time: now(), id: Date.now() };
+  notifs.unshift(n);
+  if (notifs.length > 50) notifs.pop();
+  renderNotifList();
+  updateNotifBadge();
+  if (notifVisualOn) flashNotif(type, title, sub);
+  if (notifSoundOn)  playSound(type);
+}
+
+function flashNotif(type, title, sub) {
+  const el = document.createElement('div');
+  const color = type === 'error' ? '#ff3250' : type === 'done' ? '#00ff88' : '#44aaff';
+  el.style.cssText = `position:fixed;bottom:24px;right:24px;background:#0a0a0a;border:1px solid ${color};
+    color:${color};font-family:var(--mono);font-size:9px;padding:10px 16px;z-index:9999;
+    box-shadow:0 0 20px ${color}33;animation:fadeIn .2s ease;max-width:280px;line-height:1.5`;
+  el.innerHTML = `<div style="font-size:10px;margin-bottom:2px">${esc(title)}</div><div style="opacity:.6;font-size:8px">${esc(sub)}</div>`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 3500);
+}
+
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    if (type === 'error') {
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.setValueAtTime(180, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(); osc.stop(ctx.currentTime + 0.3);
+    } else {
+      osc.frequency.setValueAtTime(523, ctx.currentTime);
+      osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc.start(); osc.stop(ctx.currentTime + 0.25);
+    }
+  } catch(e) {}
+}
+
+function checkFleetDone() {
+  const busy = Object.values(racks).flatMap(r=>Object.values(r.devices)).filter(d=>d.status==='busy').length;
+  if (fleetActive && busy === 0) {
+    pushNotif('done', '✓ Fleet complete', `All tasks finished`);
+    setBroadcastActive(false);
+  }
+}
+
+function renderNotifList() {
+  const list = document.getElementById('notifList');
+  if (!list) return;
+  if (!notifs.length) { list.innerHTML = '<div class="notif-empty">No notifications yet</div>'; return; }
+  list.innerHTML = notifs.map(n => `
+    <div class="notif-item">
+      <div class="notif-dot ${n.type}"></div>
+      <div class="notif-body">
+        <div class="notif-title">${esc(n.title)}</div>
+        <div class="notif-sub">${esc(n.sub)}</div>
+      </div>
+      <div class="notif-time">${n.time}</div>
+    </div>`).join('');
+}
+
+function updateNotifBadge() {
+  if (notifPanelOpen) return;
+  const badge = document.getElementById('notifBadge');
+  if (badge) { badge.textContent = notifs.length; badge.classList.toggle('visible', notifs.length > 0); }
+}
+
+function toggleNotifPanel() {
+  notifPanelOpen = !notifPanelOpen;
+  document.getElementById('notifPanel').classList.toggle('open', notifPanelOpen);
+  if (notifPanelOpen) {
+    const badge = document.getElementById('notifBadge');
+    if (badge) badge.classList.remove('visible');
+  }
+}
+
+function clearNotifs() { notifs = []; renderNotifList(); updateNotifBadge(); }
+
+function toggleNotifSound() {
+  notifSoundOn = !notifSoundOn;
+  document.getElementById('soundToggle').classList.toggle('on', notifSoundOn);
+  document.getElementById('soundLabel').textContent = notifSoundOn ? 'SOUND ON' : 'SOUND OFF';
+}
+
+function toggleNotifVisual() {
+  notifVisualOn = !notifVisualOn;
+  document.getElementById('visualToggle').classList.toggle('on', notifVisualOn);
+  document.getElementById('visualLabel').textContent = notifVisualOn ? 'VISUAL ON' : 'VISUAL OFF';
+}
+
+// Close notif panel on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.notif-bell') && !e.target.closest('.notif-panel')) {
+    notifPanelOpen = false;
+    document.getElementById('notifPanel')?.classList.remove('open');
+  }
+});
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+async function exportHistory() {
+  try {
+    const r = await fetch('/api/history?limit=10000', {credentials:'include'});
+    const data = await r.json();
+    const rows = data.history || [];
+    if (!rows.length) { toast('No history to export'); return; }
+
+    const headers = ['ID','TIMESTAMP','RACK','SERIAL','DEVICE','TASK','STATUS','DURATION_SEC','ERROR'];
+    const csv = [
+      headers.join(','),
+      ...rows.map(h => [
+        h.id, `"${h.ts||''}"`, `"${h.node_id||''}"`, `"${h.serial||''}"`,
+        `"${(h.device||'').replace(/"/g,'""')}"`,
+        `"${(h.task||'').replace(/"/g,'""')}"`,
+        h.status, h.duration||'', `"${(h.error||'').replace(/"/g,'""')}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `htb-history-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`✓ Exported ${rows.length} records`);
+  } catch(e) {
+    toast('✗ Export failed: ' + e.message);
+  }
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let racks = {};         // rackId → { id, name, ip, port, ws, devices, status, selected }
+let concurrencyVal = 0;
+let fleetActive = false;
+let activeTab = 'feed';
+let feedEntries = [];
+let logEntries = [];
+let logOpen = false;
+let unreadLogs = 0;
+
+// ── Demo data (replace with real WS connections) ──────────────────────────────
+
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() {
+  const rackList = Object.values(racks);
+  // Update header stats
+  let online=0, busy=0, offline=0, total=0;
+  rackList.forEach(r => {
+    Object.values(r.devices).forEach(d => {
+      total++;
+      if (d.status==='online') online++;
+      else if (d.status==='busy') busy++;
+      else offline++;
+    });
+  });
+  document.getElementById('totalRacks').textContent = rackList.length;
+  document.getElementById('totalOnline').textContent = online;
+  document.getElementById('totalBusy').textContent = busy;
+  document.getElementById('totalOffline').textContent = offline;
+  document.getElementById('totalDevices').textContent = total;
+
+  // Render rack cards
+  const area = document.getElementById('racksArea');
+  const hdr = area.querySelector('.section-hdr');
+  area.innerHTML = '';
+  area.appendChild(hdr);
+
+  rackList.forEach((rack, idx) => {
+    const devList = Object.values(rack.devices);
+    const rOnline = devList.filter(d=>d.status==='online').length;
+    const rBusy   = devList.filter(d=>d.status==='busy').length;
+    const rOff    = devList.filter(d=>d.status==='offline').length;
+    const rProg   = devList.length > 0 ? Math.round((rBusy / devList.length) * 100) : 0;
+    const isExp   = rack.expanded;
+
+    const card = document.createElement('div');
+    card.className = `rack${rack.selected?' sel':''}${isExp?' expanded':''}`;
+    card.style.animationDelay = `${idx*0.04}s`;
+    card.innerHTML = `
+      <div class="rack-hdr" onclick="toggleRack('${rack.id}')">
+        <span class="rack-id">${rack.id}</span>
+        <div>
+          <div class="rack-name">${rack.name}</div>
+          <div class="rack-ip">${rack.ip}:${rack.port}</div>
+        </div>
+        <div class="rack-stats">
+          <div class="rack-stat"><div class="rst-dot on"></div><span class="rst-val">${rOnline}</span><span class="rst-lbl">online</span></div>
+          <div class="rack-stat"><div class="rst-dot busy"></div><span class="rst-val">${rBusy}</span><span class="rst-lbl">busy</span></div>
+          <div class="rack-stat"><div class="rst-dot off"></div><span class="rst-val">${rOff}</span><span class="rst-lbl">off</span></div>
+        </div>
+        <div class="rack-prog-wrap">
+          <div class="rack-prog-bar" style="width:${rProg}%"></div>
+        </div>
+        <button class="btn rack-sel-btn${rack.selected?' rack-sel-active':''}" onclick="event.stopPropagation();selectRack('${rack.id}')" title="Include in fleet command">
+          ${rack.selected ? '☑ SELECTED' : '☐ SELECT'}
+        </button>
+        <button class="btn rack-sel-btn" onclick="event.stopPropagation();deleteRack('${rack.id}')" title="Remove this rack" style="border-color:var(--danger);color:var(--danger)">
+          ✕ REMOVE
+        </button>
+        <span class="rack-toggle">▼</span>
+      </div>
+      <div class="rack-body">
+        ${devList.map(d => `
+          <div class="dev-chip ${d.status}" title="${d.serial}">
+            <div class="dev-dot ${d.status}"></div>
+            <div>
+              <div class="dev-name">${d.name}</div>
+              <div class="dev-task">${d.status==='busy' ? '▶ '+d.task : '— idle'}</div>
+            </div>
+          </div>`).join('')}
+      </div>`;
+    area.appendChild(card);
+  });
+
+  if (activeTab === 'stats') renderStats();
+  if (activeTab === 'nodes') renderNodes();
+}
+
+function toggleRack(id) {
+  racks[id].expanded = !racks[id].expanded;
+  renderAll();
+}
+
+function selectRack(id) {
+  racks[id].selected = !racks[id].selected;
+  renderAll();
+  updateSelCount();
+  const sel = Object.values(racks).filter(r=>r.selected).length;
+  // Auto-switch dropdown to "selected" when user picks racks
+  if (sel > 0) {
+    document.getElementById('rackTarget').value = 'selected';
+    onTargetChange();
+    toast(`${sel} rack${sel>1?'s':''} selected`);
+  } else {
+    document.getElementById('rackTarget').value = 'all';
+    onTargetChange();
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.side-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase().startsWith(tab));
+  });
+  const c = document.getElementById('sideContent');
+  if (tab==='feed') {
+    c.innerHTML = '<div id="tabFeed"></div>';
+    feedEntries.slice(-50).forEach(e => appendFeedDOM(e));
+  } else if (tab==='stats') {
+    renderStats();
+  } else if (tab==='history') {
+    renderHistory();
+  } else {
+    renderNodes();
+  }
+}
+
+function renderStats() {
+  const devs = Object.values(racks).flatMap(r=>Object.values(r.devices));
+  const online = devs.filter(d=>d.status==='online').length;
+  const busy   = devs.filter(d=>d.status==='busy').length;
+  const off    = devs.filter(d=>d.status==='offline').length;
+  const total  = devs.length;
+  const c = document.getElementById('sideContent');
+  c.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-card-val">${total}</div><div class="stat-card-label">TOTAL DEVICES</div></div>
+      <div class="stat-card"><div class="stat-card-val green">${online}</div><div class="stat-card-label">ONLINE</div></div>
+      <div class="stat-card"><div class="stat-card-val blue">${busy}</div><div class="stat-card-label">RUNNING</div></div>
+      <div class="stat-card"><div class="stat-card-val orange">${off}</div><div class="stat-card-label">OFFLINE</div></div>
+      <div class="stat-card"><div class="stat-card-val">${Object.keys(racks).length}</div><div class="stat-card-label">RACKS</div></div>
+      <div class="stat-card"><div class="stat-card-val green">${total>0?Math.round(online/total*100):0}%</div><div class="stat-card-label">AVAILABILITY</div></div>
+    </div>
+    <div style="padding:0 18px 8px;font-family:var(--mono);font-size:8px;color:var(--accent);letter-spacing:.2em;">RACK BREAKDOWN</div>
+    <div class="rack-breakdown">
+      ${Object.values(racks).map(r=>{
+        const d=Object.values(r.devices);
+        const pct=d.length?Math.round(d.filter(x=>x.status!=='offline').length/d.length*100):0;
+        return `<div class="rack-row">
+          <span class="rack-row-id">${r.id}</span>
+          <div class="rack-row-bar-wrap"><div class="rack-row-bar" style="width:${pct}%"></div></div>
+          <span class="rack-row-pct">${pct}%</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+let histFilter = 'all';
+
+async function renderHistory() {
+  const c = document.getElementById('sideContent');
+  c.innerHTML = `
+    <div class="hist-stats-row" id="histStatsRow">
+      <div class="hsr"><div class="hsr-val" id="hTotal">—</div><div class="hsr-label">TOTAL</div></div>
+      <div class="hsr"><div class="hsr-val green" id="hDone">—</div><div class="hsr-label">DONE</div></div>
+      <div class="hsr"><div class="hsr-val red" id="hErr">—</div><div class="hsr-label">ERRORS</div></div>
+      <div class="hsr"><div class="hsr-val blue" id="hAvg">—</div><div class="hsr-label">AVG SEC</div></div>
+    </div>
+    <div class="hist-filters">
+      <button class="hist-filter-btn ${histFilter==='all'?'active':''}" onclick="setHistFilter('all')">ALL</button>
+      <button class="hist-filter-btn ${histFilter==='done'?'active':''}" onclick="setHistFilter('done')">DONE</button>
+      <button class="hist-filter-btn ${histFilter==='error'?'active':''}" onclick="setHistFilter('error')">ERRORS</button>
+      <button class="hist-filter-btn ${histFilter==='running'?'active':''}" onclick="setHistFilter('running')">RUNNING</button>
+      <button class="export-btn" style="margin-left:auto" onclick="exportHistory()">⬇ EXPORT CSV</button>
+      <button class="hist-filter-btn" style="border-color:#ff4466;color:#ff4466" onclick="clearHistory()">✕ CLEAR</button>
+    </div>
+    <div style="display:flex;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);align-items:center">
+      <span style="font-size:7px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em">DEVICE</span>
+      <input id="histDeviceFilter" type="text" placeholder="serial or name..." 
+        style="flex:1;background:transparent;border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:8px;padding:3px 7px;outline:none"
+        oninput="loadHistory()" />
+      <span style="font-size:7px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em">RACK</span>
+      <select id="histRackFilter" onchange="loadHistory()"
+        style="background:#111;border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:8px;padding:3px 7px;outline:none">
+        <option value="">All racks</option>
+        ${Object.values(racks).map(r=>`<option value="${r.id}">${r.id}</option>`).join('')}
+      </select>
+      <button class="hist-filter-btn" onclick="clearHistFilters()">RESET</button>
+    </div>
+    <div id="histTableWrap" style="overflow-y:auto;flex:1">
+      <table class="hist-table">
+        <thead><tr>
+          <th>TIME</th><th>RACK</th><th>DEVICE</th><th>TASK</th><th>STATUS</th><th>SEC</th>
+        </tr></thead>
+        <tbody id="histBody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr></tbody>
+      </table>
+    </div>`;
+  await loadHistory();
+}
+
+async function loadHistory() {
+  try {
+    const deviceF = document.getElementById('histDeviceFilter')?.value?.trim() || '';
+    const rackF   = document.getElementById('histRackFilter')?.value || '';
+    let url = `/api/history?limit=200`;
+    if (histFilter !== 'all') url += `&status=${histFilter}`;
+    if (deviceF) url += `&serial=${encodeURIComponent(deviceF)}`;
+    if (rackF)   url += `&node_id=${encodeURIComponent(rackF)}`;
+    const [hist, stats] = await Promise.all([
+      fetch(url, {credentials:'include'}).then(r=>r.json()),
+      fetch('/api/history/stats', {credentials:'include'}).then(r=>r.json())
+    ]);
+
+    // Stats row
+    const el = id => document.getElementById(id);
+    if (el('hTotal')) el('hTotal').textContent = stats.total || 0;
+    if (el('hDone'))  el('hDone').textContent  = stats.done  || 0;
+    if (el('hErr'))   el('hErr').textContent   = stats.errors || 0;
+    if (el('hAvg'))   el('hAvg').textContent   = stats.avg_duration || 0;
+
+    // Table
+    const tbody = el('histBody');
+    if (!tbody) return;
+    if (!hist.history?.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">No history yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = hist.history.map(h => {
+      const t = h.ts ? h.ts.slice(11,19) : '—';
+      const task = (h.task || '').slice(0,28) + ((h.task||'').length>28?'…':'');
+      const dev  = (h.device || h.serial || '').slice(0,12);
+      const dur  = h.duration != null ? h.duration+'s' : '—';
+      const err  = h.error ? ` title="${esc(h.error)}"` : '';
+      return `<tr${err}>
+        <td style="color:var(--muted)">${t}</td>
+        <td style="color:var(--accent);cursor:pointer" onclick="filterByRack('${esc(h.node_id)}')" title="Filter by this rack">${esc(h.node_id)}</td>
+        <td style="color:rgba(255,255,255,.5);cursor:pointer" onclick="filterByDevice('${esc(h.serial||h.device||'')}')" title="Filter by this device">${esc(dev)}</td>
+        <td style="color:var(--white)">${esc(task)}</td>
+        <td><span class="h-status ${h.status}">${h.status.toUpperCase()}</span></td>
+        <td style="color:var(--muted)">${dur}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    const tbody = document.getElementById('histBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="color:#ff3250;padding:12px">${e.message}</td></tr>`;
+  }
+}
+
+function filterByDevice(serial) {
+  const el = document.getElementById('histDeviceFilter');
+  if (el) { el.value = serial; loadHistory(); }
+}
+
+function filterByRack(rackId) {
+  const el = document.getElementById('histRackFilter');
+  if (el) { el.value = rackId; loadHistory(); }
+}
+
+function clearHistFilters() {
+  const d = document.getElementById('histDeviceFilter');
+  const r = document.getElementById('histRackFilter');
+  if (d) d.value = '';
+  if (r) r.value = '';
+  histFilter = 'all';
+  renderHistory();
+}
+
+function setHistFilter(f) {
+  histFilter = f;
+  renderHistory();
+}
+
+async function clearHistory() {
+  if (!confirm('Clear all task history?')) return;
+  await fetch('/api/history', {method:'DELETE', credentials:'include'});
+  renderHistory();
+  toast('History cleared');
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderNodes() {
+  const c = document.getElementById('sideContent');
+  c.innerHTML = Object.values(racks).map(r=>`
+    <div style="padding:10px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <div class="rst-dot ${r.status==='connected'?'on':'off'}"></div>
+      <div style="flex:1">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--white)">${r.id} — ${r.name}</div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted)">${r.ip}:${r.port} · ${Object.keys(r.devices).length} devices</div>
+      </div>
+      <button class="btn" style="font-size:8px;padding:3px 8px" onclick="pingRack('${r.id}')">PING</button>
+      <button class="btn" style="font-size:8px;padding:3px 8px;border-color:var(--danger);color:var(--danger)" onclick="deleteRack('${r.id}')">REMOVE</button>
+    </div>`).join('');
+}
+
+// ── Activity Feed ─────────────────────────────────────────────────────────────
+function addFeed(type, rack, msg) {
+  const entry = { type, rack, msg, time: now() };
+  feedEntries.push(entry);
+  if (feedEntries.length > 200) feedEntries.shift();
+  if (activeTab === 'feed') appendFeedDOM(entry);
+  addLog(rack, msg, type);
+}
+
+function appendFeedDOM(entry) {
+  const feed = document.getElementById('tabFeed');
+  if (!feed) return;
+  const div = document.createElement('div');
+  div.className = 'feed-entry';
+  div.innerHTML = `
+    <div class="feed-dot ${entry.type}"></div>
+    <div class="feed-body">
+      <div class="feed-rack">${entry.rack}</div>
+      <div class="feed-msg">${esc(entry.msg)}</div>
+      <div class="feed-time">${entry.time}</div>
+    </div>`;
+  feed.insertBefore(div, feed.firstChild);
+  while (feed.children.length > 60) feed.removeChild(feed.lastChild);
+}
+
+// ── Fleet Commands ────────────────────────────────────────────────────────────
+async function sendFleet() {
+  const cmd = document.getElementById('cmdInput').value.trim();
+  if (!cmd) { toast('⚠ Enter a command first'); return; }
+
+  const target = document.getElementById('rackTarget').value;
+  const selectedIds = Object.values(racks).filter(r=>r.selected).map(r=>r.id);
+
+  // Warn if "selected" but nothing selected
+  if (target === 'selected' && selectedIds.length === 0) {
+    toast('⚠ No racks selected — click ☐ SELECT on the racks you want');
+    return;
+  }
+
+  // Show confirmation with exact targets
+  let targetNames = [];
+  if (target === 'selected') {
+    targetNames = selectedIds;
+  } else if (target === 'online') {
+    targetNames = Object.values(racks).filter(r=>r.status==='connected').map(r=>r.id);
+  } else {
+    targetNames = Object.values(racks).map(r=>r.id);
+  }
+
+  if (targetNames.length === 0) {
+    toast('⚠ No racks available for this target');
+    return;
+  }
+
+  // Confirm before sending
+  const label = target === 'selected' ? `${selectedIds.length} selected rack(s): ${selectedIds.join(', ')}` :
+                target === 'online'   ? `all online racks (${targetNames.length})` :
+                                        `ALL racks (${targetNames.length})`;
+  if (!confirm(`Send command to ${label}?\n\n"${cmd}"`)) return;
+
+  document.getElementById('cmdInput').value = '';
+
+  if (wsConnected) {
+    const r = await post('/api/fleet/broadcast', {
+      task: cmd, target, node_ids: selectedIds, concurrency: concurrencyVal
+    });
+    if (!r?.ok) { toast('✗ ' + (r?.error || 'Fleet command failed')); return; }
+    toast(`▶ Sent to ${r.nodes} racks — ${r.devices} devices`);
+    addFeed('task', 'MASTER', `▶ "${cmd}" → ${label}`);
+  } else {
+    toast('✗ No conectado al master server');
+  }
+}
+
+
+
+async function stopFleet() {
+  if (wsConnected) {
+    const r = await post('/api/fleet/stop', {});
+    toast(`⏹ Stopped ${r?.stopped||0} tasks across all racks`);
+  } else {
+    toast('✗ No conectado al master server');
+  }
+  addFeed('error', 'MASTER', '⏹ Fleet stopped by operator');
+  setFleetActive(false);
+}
+
+function setFleetActive(active) {
+  fleetActive = active;
+  document.getElementById('btnStop').style.display = active ? 'block' : 'none';
+  document.getElementById('btnSend').style.display = active ? 'none' : 'block';
+}
+
+async function resetRegistry() {
+  if (!confirm('Clear all registered nodes? This cannot be undone.')) return;
+  const r = await post('/api/nodes/reset', {});
+  if (r?.ok) {
+    toast('✓ Registry cleared — register nodes again');
+    addFeed('info', 'MASTER', 'Registry reset');
+  }
+}
+
+async function scanAll() {
+  toast('⟳ Scanning all rack nodes...');
+  if (wsConnected) {
+    const r = await post('/api/nodes/scan', {});
+    toast(`⟳ ${r?.online||0}/${r?.total||0} nodes online`);
+  }
+  addFeed('info', 'MASTER', '⟳ Manual scan triggered');
+}
+
+function addRack() {
+  // Show registration modal
+  document.getElementById('modalOverlay').style.display = 'flex';
+  document.getElementById('regIp').focus();
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').style.display = 'none';
+  document.getElementById('regIp').value = '';
+  document.getElementById('regPort').value = '8889';
+  document.getElementById('regName').value = '';
+  document.getElementById('regError').textContent = '';
+}
+
+async function submitRegister() {
+  const ip = document.getElementById('regIp').value.trim();
+  const port = parseInt(document.getElementById('regPort').value) || 8889;
+  const name = document.getElementById('regName').value.trim();
+
+  if (!ip) { document.getElementById('regError').textContent = 'IP is required'; return; }
+
+  const btn = document.getElementById('regSubmitBtn');
+  btn.textContent = 'CONNECTING...';
+  btn.disabled = true;
+  document.getElementById('regError').textContent = '';
+
+  try {
+    const r = await post('/api/nodes/register', { ip, port, name });
+    if (r?.ok) {
+      closeModal();
+      toast(`✓ Node registered: ${r.node.name} (${ip}:${port})`);
+      addFeed('success', r.node.id, `✓ Node registered — ${r.node.hostname || ip} — ${r.node.devices} devices`);
+    } else {
+      document.getElementById('regError').textContent = r?.error || 'Registration failed';
+    }
+  } catch(e) {
+    document.getElementById('regError').textContent = 'Could not reach master server';
+  } finally {
+    btn.textContent = 'REGISTER NODE';
+    btn.disabled = false;
+  }
+}
+
+async function deleteRack(id) {
+  if (!confirm(`Remove rack ${id} from the registry?\n\nThis will unregister the node. You can re-add it later.`)) return;
+  try {
+    const r = await fetch(`/api/nodes/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
+    const data = await r.json();
+    if (data.ok) {
+      delete racks[id];
+      renderAll();
+      addFeed('info', 'MASTER', `✕ Rack ${id} removed from registry`);
+      toast(`✓ Rack ${id} removed`);
+      if (activeTab === 'nodes') renderNodes();
+    } else {
+      toast(`✗ ${data.error || 'Could not remove rack'}`);
+    }
+  } catch(e) {
+    toast('✗ Error removing rack: ' + e.message);
+  }
+}
+
+async function pingRack(id) {
+  addFeed('info', id, 'Ping sent...');
+  setTimeout(() => addFeed('success', id, '✓ Pong — node alive'), 300);
+  toast(`Pinging ${id}...`);
+}
+
+// ── Concurrency ────────────────────────────────────────────────────────────────
+function onTargetChange() {
+  const val = document.getElementById('rackTarget').value;
+  const hint = document.getElementById('selHint');
+  if (hint) hint.style.display = val === 'selected' ? 'flex' : 'none';
+  if (val === 'selected') updateSelCount();
+}
+
+function updateSelCount() {
+  const sel = Object.values(racks).filter(r=>r.selected).length;
+  const el = document.getElementById('selCount');
+  if (el) el.textContent = sel;
+  const hint = document.getElementById('selHint');
+  if (hint && document.getElementById('rackTarget').value === 'selected') {
+    hint.style.display = 'flex';
+  }
+}
+
+function clearSelection() {
+  Object.values(racks).forEach(r => r.selected = false);
+  renderAll();
+  updateSelCount();
+  toast('Selection cleared');
+}
+
+function selectAll() {
+  Object.values(racks).forEach(r => r.selected = true);
+  renderAll();
+  updateSelCount();
+  toast(`All ${Object.keys(racks).length} racks selected`);
+}
+
+function adjConc(delta) {
+  concurrencyVal = Math.max(0, concurrencyVal + delta);
+  document.getElementById('concVal').textContent = concurrencyVal === 0 ? '∞' : concurrencyVal;
+  const hint = document.getElementById('concHint');
+  if (hint) {
+    if (concurrencyVal === 0) hint.textContent = 'ALL AT ONCE';
+    else if (concurrencyVal === 1) hint.textContent = 'ONE BY ONE';
+    else hint.textContent = `${concurrencyVal} AT A TIME`;
+  }
+}
+
+// ── Demo simulation ───────────────────────────────────────────────────────────
+
+
+
+
+// ── Log Panel ─────────────────────────────────────────────────────────────────
+function addLog(rack, msg, type) {
+  const entry = { rack, msg, type, time: now() };
+  logEntries.push(entry);
+  if (logEntries.length > 500) logEntries.shift();
+  const body = document.getElementById('logBody');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="log-time">${entry.time}</span><span class="log-rack">${rack}</span><span class="log-msg ${type==='error'?'err':type==='success'?'ok':''}">${esc(msg)}</span>`;
+  body.appendChild(div);
+  while (body.children.length > 500) body.removeChild(body.firstChild);
+  if (logOpen) body.scrollTop = body.scrollHeight;
+  else {
+    unreadLogs++;
+    const c = document.getElementById('logCount');
+    c.textContent = unreadLogs > 99 ? '99+' : unreadLogs;
+    c.classList.remove('hidden');
+  }
+}
+
+function toggleLog() {
+  logOpen = !logOpen;
+  const p = document.getElementById('logPanel');
+  p.className = 'log-panel ' + (logOpen ? 'expanded' : 'collapsed');
+  document.getElementById('logToggleBtn').textContent = logOpen ? '↕ COLLAPSE' : '↕ EXPAND';
+  document.querySelector('.log-title').textContent = (logOpen ? '▾ ' : '▸ ') + 'MASTER LOG';
+  if (logOpen) {
+    unreadLogs = 0;
+    document.getElementById('logCount').classList.add('hidden');
+    document.getElementById('logBody').scrollTop = 9999;
+  }
+}
+
+function clearLog() {
+  logEntries = [];
+  document.getElementById('logBody').innerHTML = '';
+  unreadLogs = 0;
+  document.getElementById('logCount').classList.add('hidden');
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+async function post(path, body) {
+  try {
+    const r = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    return await r.json();
+  } catch(e) {
+    console.error('POST failed:', path, e);
+    throw e;
+  }
+}
+
+function now() { return new Date().toTimeString().slice(0,8); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Monitor fleet completion
+setInterval(() => {
+  if (fleetActive) {
+    const anyBusy = Object.values(racks).some(r=>Object.values(r.devices).some(d=>d.status==='busy'));
+    if (!anyBusy) setFleetActive(false);
+  }
+}, 2000);
+
+// Init
+initWS();
+</script>
+
+<!-- ── Registration Modal ── -->
+<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:500;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--accent);padding:32px;width:420px;box-shadow:0 0 40px rgba(0,255,136,0.15)">
+    <div style="font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.2em;margin-bottom:24px">+ REGISTER RACK NODE</div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.15em;margin-bottom:6px">MAC MINI IP ADDRESS *</div>
+        <input id="regIp" placeholder="192.168.0.21" style="width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:12px;padding:8px 12px;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('regPort').focus()"/>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.15em;margin-bottom:6px">PORT (default 8889)</div>
+        <input id="regPort" value="8889" style="width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:12px;padding:8px 12px;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('regName').focus()"/>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.15em;margin-bottom:6px">RACK NAME (optional)</div>
+        <input id="regName" placeholder="RACK-01 / Lab A / Floor 2..." style="width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--white);font-family:var(--mono);font-size:12px;padding:8px 12px;outline:none" onkeydown="if(event.key==='Enter')submitRegister()"/>
+      </div>
+      <div id="regError" style="font-family:var(--mono);font-size:10px;color:var(--danger);min-height:16px"></div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button id="regSubmitBtn" onclick="submitRegister()" style="flex:1;padding:10px;background:rgba(0,255,136,0.1);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:.1em;cursor:pointer">REGISTER NODE</button>
+        <button onclick="closeModal()" style="padding:10px 20px;background:transparent;border:1px solid var(--border2);color:var(--muted);font-family:var(--mono);font-size:11px;cursor:pointer">CANCEL</button>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px">
+        Make sure HTB Agent is running on the Mac Mini:<br>
+        <span style="color:var(--accent)">cd hackthebox-agent-full && ./start.sh</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

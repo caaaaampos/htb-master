@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTB — OS-SPOTIFY</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #020304;
+  --surface: #080c10;
+  --surface2:#0d1419;
+  --border:  #0f1923;
+  --border2: #162030;
+  --accent:  #1db954;   /* Spotify green */
+  --accent2: #0088ff;
+  --danger:  #ff2244;
+  --white:   #e8f0f8;
+  --dim:     rgba(232,240,248,.55);
+  --muted:   rgba(232,240,248,.2);
+  --mono:    'Share Tech Mono', monospace;
+  --sans:    'Rajdhani', sans-serif;
+  --glow:    0 0 18px rgba(29,185,84,.18);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--white); font-family:var(--sans); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+body::before { content:''; position:fixed; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(29,185,84,.004) 3px,rgba(29,185,84,.004) 4px); pointer-events:none; z-index:999; }
+
+/* ── Header ── */
+.hdr { height:48px; background:rgba(2,3,4,.97); border-bottom:1px solid var(--border2); display:flex; align-items:center; gap:16px; padding:0 20px; flex-shrink:0; z-index:100; }
+.logo-mark { width:26px; height:26px; border:1px solid var(--accent); position:relative; box-shadow:var(--glow); flex-shrink:0; }
+.logo-mark::before { content:''; position:absolute; inset:4px; border:1px solid var(--accent); transform:rotate(45deg); opacity:.6; }
+.logo-text { font-family:var(--mono); font-size:12px; color:var(--accent); letter-spacing:.18em; text-shadow:0 0 10px rgba(29,185,84,.4); white-space:nowrap; }
+.hdr-sep { width:1px; height:22px; background:var(--border2); }
+.hdr-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.btn { font-family:var(--mono); font-size:9px; padding:5px 12px; border:1px solid var(--border2); background:transparent; color:var(--dim); cursor:pointer; letter-spacing:.08em; transition:all .15s; white-space:nowrap; }
+.btn:hover { border-color:var(--accent); color:var(--accent); box-shadow:var(--glow); }
+.btn-accent { border-color:var(--accent); color:var(--accent); }
+.btn-accent:hover { background:rgba(29,185,84,.1); }
+.btn-danger { border-color:var(--danger); color:var(--danger); }
+.btn-danger:hover { background:rgba(255,34,68,.08); }
+.ws-dot { font-family:var(--mono); font-size:9px; color:var(--danger); letter-spacing:.08em; }
+.ws-dot.on { color:var(--accent); }
+
+/* ── Layout ── */
+.body-wrap { flex:1; display:flex; min-height:0; }
+
+/* ── Sidebar ── */
+.sidebar { width:180px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; }
+.sidebar-title { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:.18em; padding:14px 16px 8px; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; border-left:2px solid transparent; transition:all .15s; font-family:var(--mono); font-size:10px; color:var(--muted); }
+.nav-item:hover { color:var(--dim); background:rgba(255,255,255,.02); }
+.nav-item.active { border-left-color:var(--accent); color:var(--accent); background:rgba(29,185,84,.04); }
+.nav-icon { font-size:13px; flex-shrink:0; }
+.nav-more { padding:14px 16px 8px; font-family:var(--mono); font-size:8px; color:rgba(232,240,248,.1); letter-spacing:.15em; margin-top:auto; }
+
+/* ── Main panel ── */
+.main-panel { flex:1; display:flex; min-height:0; }
+
+/* ── Config column ── */
+.config-col { width:420px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; display:flex; flex-direction:column; }
+.config-col::-webkit-scrollbar { width:3px; }
+.config-col::-webkit-scrollbar-thumb { background:var(--border2); }
+.section { padding:16px 18px; border-bottom:1px solid var(--border); }
+.section-title { font-family:var(--mono); font-size:8px; color:var(--accent); letter-spacing:.18em; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.section-title::before { content:''; display:inline-block; width:6px; height:6px; border:1px solid var(--accent); transform:rotate(45deg); }
+.field-label { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:.12em; margin-bottom:5px; }
+.field-input { width:100%; background:var(--bg); border:1px solid var(--border2); color:var(--white); font-family:var(--mono); font-size:11px; padding:6px 10px; outline:none; transition:border-color .15s; }
+.field-input:focus { border-color:var(--accent); box-shadow:0 0 8px rgba(29,185,84,.1); }
+.field-input::placeholder { color:var(--muted); }
+.field-textarea { resize:vertical; min-height:110px; }
+.row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.row4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+.field-hint { font-family:var(--mono); font-size:8px; color:rgba(232,240,248,.15); margin-top:4px; }
+.field-sep { display:flex; align-items:center; gap:8px; margin:0 4px; font-family:var(--mono); font-size:10px; color:var(--muted); align-self:flex-end; padding-bottom:8px; }
+.range-row { display:flex; align-items:flex-end; gap:4px; }
+.range-row .field-group { flex:1; }
+
+/* LLM selector */
+.pvr-row { display:flex; gap:4px; flex-wrap:wrap; }
+.pvr-btn { font-family:var(--mono); font-size:8px; padding:4px 8px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; letter-spacing:.06em; transition:all .15s; }
+.pvr-btn:hover { border-color:var(--accent); color:var(--accent); }
+.pvr-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,84,.07); }
+
+/* target */
+.target-row { display:flex; gap:6px; }
+.tgt-btn { flex:1; font-family:var(--mono); font-size:8px; padding:5px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; letter-spacing:.06em; transition:all .15s; text-align:center; }
+.tgt-btn:hover { border-color:var(--accent); color:var(--accent); }
+.tgt-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,84,.07); }
+
+/* devices list */
+.dev-list { max-height:220px; overflow-y:auto; border:1px solid var(--border); }
+.dev-list::-webkit-scrollbar { width:2px; }
+.dev-list::-webkit-scrollbar-thumb { background:var(--border2); }
+.dev-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-bottom:1px solid var(--border); transition:background .12s; }
+.dev-row:last-child { border-bottom:none; }
+.dev-row:hover { background:rgba(255,255,255,.02); }
+.dev-cb { accent-color:var(--accent); width:13px; height:13px; cursor:pointer; }
+.dev-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.dev-dot.online { background:var(--accent); animation:blink 2s infinite; }
+.dev-dot.busy   { background:var(--accent2); }
+.dev-dot.offline{ background:#333; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:.3} }
+.dev-name { font-family:var(--mono); font-size:10px; color:var(--dim); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dev-serial { font-family:var(--mono); font-size:8px; color:var(--muted); }
+.dev-empty { padding:16px; font-family:var(--mono); font-size:9px; color:var(--muted); text-align:center; letter-spacing:.1em; }
+
+/* action buttons */
+.action-row { display:flex; gap:8px; padding:16px 18px; border-top:1px solid var(--border); margin-top:auto; }
+.action-row .btn { flex:1; padding:8px; font-size:9px; text-align:center; }
+
+/* ── Right column: active sessions + log ── */
+.right-col { flex:1; display:flex; flex-direction:column; min-width:0; }
+.sessions-panel { flex:1; overflow-y:auto; padding:12px; }
+.sessions-panel::-webkit-scrollbar { width:3px; }
+.sessions-panel::-webkit-scrollbar-thumb { background:var(--border2); }
+.sessions-title { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:.18em; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.sess-card { background:var(--surface); border:1px solid var(--border); margin-bottom:8px; animation:cardIn .25s ease; }
+@keyframes cardIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+.sess-hdr { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); }
+.sess-serial { font-family:var(--mono); font-size:10px; color:var(--white); flex:1; }
+.sess-phase { font-family:var(--mono); font-size:8px; padding:2px 7px; border:1px solid var(--border2); color:var(--muted); }
+.sess-phase.running { border-color:var(--accent); color:var(--accent); }
+.sess-phase.first_song,.sess-phase.opening,.sess-phase.connecting { border-color:var(--accent2); color:var(--accent2); }
+.sess-phase.done { border-color:#444; color:#555; }
+.sess-body { padding:8px 12px; display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.sess-stat { display:flex; flex-direction:column; gap:1px; }
+.ss-val { font-family:var(--mono); font-size:13px; color:var(--white); }
+.ss-lbl { font-family:var(--mono); font-size:7px; color:var(--muted); letter-spacing:.1em; }
+.sess-bar-wrap { padding:0 12px 10px; }
+.sess-bar { height:2px; background:var(--border2); }
+.sess-bar-fill { height:100%; background:linear-gradient(to right,var(--accent2),var(--accent)); transition:width .6s ease; }
+.sess-log { padding:4px 12px 8px; max-height:80px; overflow-y:auto; }
+.sess-log::-webkit-scrollbar { width:2px; }
+.sess-log::-webkit-scrollbar-thumb { background:var(--border2); }
+.sess-log-entry { font-family:var(--mono); font-size:9px; color:var(--muted); line-height:1.7; display:flex; gap:8px; }
+.sess-log-entry.success { color:rgba(29,185,84,.7); }
+.sess-log-entry.error   { color:rgba(255,34,68,.6); }
+.sess-log-time { flex-shrink:0; color:rgba(232,240,248,.2); }
+
+.no-sessions { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; }
+.no-sess-hex { width:36px; height:36px; border:1px solid rgba(29,185,84,.15); transform:rotate(45deg); }
+.no-sess-msg { font-family:var(--mono); font-size:9px; color:rgba(29,185,84,.2); letter-spacing:.1em; text-align:center; line-height:2; }
+
+/* ── Toast ── */
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(8px); background:var(--accent); color:#000; font-family:var(--mono); font-size:10px; padding:7px 16px; opacity:0; transition:all .25s; pointer-events:none; z-index:9999; }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="hdr">
+  <div class="logo-mark"></div>
+  <div class="logo-text">HTB NODE // OS-SPOTIFY</div>
+  <div class="hdr-sep"></div>
+  <span class="ws-dot" id="wsDot">⬤ OFFLINE</span>
+  <div class="hdr-right">
+    <button class="btn" onclick="refreshDevices()">⟳ REFRESH</button>
+    <button class="btn" onclick="window.location='/'">← FLEET</button>
+  </div>
+</div>
+
+<div class="body-wrap">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="sidebar-title">OS TOOLS</div>
+    <div class="nav-item active">
+      <span class="nav-icon">♫</span>
+      <span>SPOTIFY</span>
+    </div>
+    <div class="nav-more">MORE TOOLS<br>COMING SOON</div>
+  </div>
+
+  <!-- ── Main ── -->
+  <div class="main-panel">
+
+    <!-- ── Config column ── -->
+    <div class="config-col">
+
+      <!-- Playlists -->
+      <div class="section">
+        <div class="section-title">PLAYLIST URLS</div>
+        <div class="field-label">ONE URL PER LINE (spotify.com or spotify: deep link)</div>
+        <textarea class="field-input field-textarea" id="playlistUrls"
+          placeholder="https://open.spotify.com/playlist/...&#10;https://open.spotify.com/playlist/...&#10;# comment lines are ignored"></textarea>
+        <div class="field-hint">Min 1 playlist required. The first one is selected randomly per device.</div>
+      </div>
+
+      <!-- Timing -->
+      <div class="section">
+        <div class="section-title">LISTEN TIMING (seconds)</div>
+        <div class="range-row">
+          <div class="field-group">
+            <div class="field-label">MIN</div>
+            <input class="field-input" id="listenMin" type="number" value="40" min="5" max="300">
+          </div>
+          <div class="field-sep">—</div>
+          <div class="field-group">
+            <div class="field-label">MAX</div>
+            <input class="field-input" id="listenMax" type="number" value="60" min="5" max="300">
+          </div>
+        </div>
+        <div class="field-hint">Each device draws a random wait in this range every cycle.</div>
+      </div>
+
+      <!-- Tracks per playlist -->
+      <div class="section">
+        <div class="section-title">TRACKS BEFORE PLAYLIST SWITCH</div>
+        <div class="range-row">
+          <div class="field-group">
+            <div class="field-label">MIN</div>
+            <input class="field-input" id="tracksMin" type="number" value="15" min="1" max="200">
+          </div>
+          <div class="field-sep">—</div>
+          <div class="field-group">
+            <div class="field-label">MAX</div>
+            <input class="field-input" id="tracksMax" type="number" value="20" min="1" max="200">
+          </div>
+        </div>
+        <div class="field-hint">How many songs per playlist before rotating to the next.</div>
+      </div>
+
+      <!-- Session duration -->
+      <div class="section">
+        <div class="section-title">SESSION DURATION</div>
+        <div class="row2">
+          <div>
+            <div class="field-label">TOTAL MINUTES</div>
+            <input class="field-input" id="durationMin" type="number" value="120" min="1" max="1440">
+          </div>
+          <div>
+            <div class="field-label">LLM STEPS / TICK</div>
+            <input class="field-input" id="llmSteps" type="number" value="15" min="5" max="50">
+          </div>
+        </div>
+      </div>
+
+      <!-- LLM Config -->
+      <div class="section">
+        <div class="section-title">LLM PROVIDER</div>
+        <div class="pvr-row" id="providerBtns">
+          <button class="pvr-btn active" onclick="setProvider('Ollama')">Ollama (local)</button>
+          <button class="pvr-btn" onclick="setProvider('OpenAI')">OpenAI</button>
+        </div>
+        <div style="margin-top:8px">
+          <div class="field-label">MODEL</div>
+          <input class="field-input" id="llmModel" type="text" placeholder="Leave blank → use Fleet default (e.g. gpt-4o, qwen2.5:14b)">
+        </div>
+        <div style="margin-top:8px">
+          <div class="field-label" id="llmKeyLabel">API KEY / OLLAMA URL</div>
+          <input class="field-input" id="llmKey" type="password" placeholder="Leave blank → use key from Fleet settings">
+          <div class="field-hint">Leave blank to reuse the credentials saved in Fleet &gt; Settings.</div>
+        </div>
+      </div>
+
+      <!-- Concurrency -->
+      <div class="section">
+        <div class="section-title">CONCURRENCY</div>
+        <div class="row2">
+          <div>
+            <div class="field-label">PARALLEL DEVICES</div>
+            <input class="field-input" id="devConcurrency" type="number" value="0" min="0" max="100"
+              placeholder="0 = all at once">
+          </div>
+          <div>
+            <div class="field-label">LLM QUEUE SLOTS</div>
+            <input class="field-input" id="llmConcurrency" type="number" value="10" min="1" max="60">
+          </div>
+        </div>
+        <div class="field-hint">LLM queue: max parallel LLM calls (1 slot = 1 device's tick at a time).</div>
+      </div>
+
+      <!-- Target -->
+      <div class="section">
+        <div class="section-title">TARGET DEVICES</div>
+        <div class="target-row" id="targetBtns">
+          <button class="tgt-btn active" onclick="setTarget('online')">ONLINE ONLY</button>
+          <button class="tgt-btn" onclick="setTarget('selected')">SELECTED</button>
+          <button class="tgt-btn" onclick="setTarget('all')">ALL</button>
+        </div>
+      </div>
+
+      <!-- Device list -->
+      <div class="section">
+        <div class="section-title">DEVICES
+          <span style="margin-left:auto;font-size:8px;color:var(--muted);letter-spacing:.08em" id="devCount">—</span>
+        </div>
+        <div class="dev-list" id="devList">
+          <div class="dev-empty">Loading devices…</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="action-row" style="position:sticky;bottom:0;background:var(--surface);z-index:10;border-top:1px solid var(--border2);">
+        <button class="btn btn-accent" onclick="startSession()">▶ START SESSION</button>
+        <button class="btn btn-danger" onclick="stopAll()" id="btnStop" style="display:none">⏹ STOP ALL</button>
+      </div>
+
+    </div><!-- /config-col -->
+
+    <!-- ── Right: sessions + activity ── -->
+    <div class="right-col">
+      <div class="sessions-panel" id="sessionsPanel">
+        <div class="sessions-title">
+          <span>ACTIVE SESSIONS</span>
+          <span id="sessCount" style="font-family:var(--mono);font-size:9px;color:var(--muted)">0 running</span>
+        </div>
+        <div id="sessionsWrap">
+          <div class="no-sessions">
+            <div class="no-sess-hex"></div>
+            <div class="no-sess-msg">NO ACTIVE SESSIONS<br>Start a session to monitor devices</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-panel -->
+</div><!-- /body-wrap -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const NODE = `${location.origin}`;
+let ws = null;
+let connected = false;
+let devices = {};
+let target = 'online';
+let provider = 'Ollama';
+let sessions = {};   // serial → {phase, progress, tracks, log[]}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function initWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    connected = true;
+    document.getElementById('wsDot').textContent = '⬤ LIVE';
+    document.getElementById('wsDot').className = 'ws-dot on';
+    loadDevices();
+    loadConfig();
+  };
+  ws.onclose = () => {
+    connected = false;
+    document.getElementById('wsDot').textContent = '⬤ OFFLINE';
+    document.getElementById('wsDot').className = 'ws-dot';
+    setTimeout(initWS, 3000);
+  };
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'init') {
+        devices = {};
+        (msg.devices || []).forEach(d => { devices[d.serial] = d; });
+        renderDeviceList();
+      } else if (msg.type === 'device_update' || msg.type === 'task_complete' || msg.type === 'task_error') {
+        handleDeviceEvent(msg);
+      }
+    } catch {}
+  };
+}
+
+function handleDeviceEvent(msg) {
+  if (!msg.serial) return;
+  const serial = msg.serial;
+
+  // update local device status
+  if (devices[serial]) {
+    if (msg.status) devices[serial].status = msg.status;
+    if (msg.task !== undefined) devices[serial].task = msg.task;
+    if (msg.progress !== undefined) devices[serial].progress = msg.progress;
+  }
+  renderDeviceList();
+
+  // track sessions
+  if (msg.task === '♫ Spotify' || sessions[serial]) {
+    if (!sessions[serial]) sessions[serial] = { phase: 'running', progress: 0, logs: [] };
+    // only override phase for terminal events; otherwise let syncStatusFromApi set it
+    if (msg.type === 'task_complete' || msg.type === 'task_error') {
+      sessions[serial].phase = 'done';
+    }
+    if (msg.progress !== undefined) sessions[serial].progress = msg.progress;
+    if (msg.log) {
+      sessions[serial].logs.unshift(msg.log);
+      if (sessions[serial].logs.length > 50) sessions[serial].logs.length = 50;
+    }
+  }
+  renderSessions();
+  // fast sync on activity so elapsed/remaining stays current
+  clearTimeout(window._syncTimer);
+  window._syncTimer = setTimeout(syncStatusFromApi, 1500);
+}
+
+// ── Devices ────────────────────────────────────────────────────────────────
+async function loadDevices() {
+  try {
+    const r = await fetch(`${NODE}/api/devices`);
+    const d = await r.json();
+    devices = {};
+    (d.devices || []).forEach(dev => { devices[dev.serial] = dev; });
+    renderDeviceList();
+  } catch(e) { toast('✗ Cannot reach node: ' + e.message); }
+}
+
+function refreshDevices() {
+  loadDevices();
+  syncStatusFromApi();
+  toast('⟳ Refreshed');
+}
+
+function renderDeviceList() {
+  const list = document.getElementById('devList');
+  const all = Object.values(devices);
+  document.getElementById('devCount').textContent = `${all.filter(d => d.status !== 'offline').length} online / ${all.length} total`;
+
+  if (!all.length) {
+    list.innerHTML = '<div class="dev-empty">No devices detected</div>';
+    return;
+  }
+
+  list.innerHTML = all.map(d => {
+    const offline = d.status === 'offline';
+    return `
+      <div class="dev-row" style="${offline ? 'opacity:.4' : ''}">
+        <input type="checkbox" class="dev-cb" id="cb-${d.serial}" value="${d.serial}"
+          ${offline ? 'disabled' : ''}
+          onchange="onDevCheck()"
+        />
+        <div class="dev-dot ${d.status}"></div>
+        <span class="dev-name" title="${esc(d.name)}">${esc(d.name)}</span>
+        <span class="dev-serial">${d.serial.slice(0,12)}</span>
+      </div>`;
+  }).join('');
+}
+
+function onDevCheck() {
+  if (target !== 'selected') setTarget('selected');
+}
+
+function getSelectedSerials() {
+  return [...document.querySelectorAll('.dev-cb:checked')].map(cb => cb.value);
+}
+
+// ── Config ─────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const r = await fetch(`${NODE}/api/config`);
+    const cfg = await r.json();
+    if (cfg.provider && ['Ollama','OpenAI'].includes(cfg.provider))
+      setProvider(cfg.provider);
+    if (cfg.model && !document.getElementById('llmModel').value)
+      document.getElementById('llmModel').placeholder = `Fleet default: ${cfg.model}`;
+  } catch {}
+  setProvider(provider);
+}
+
+function setProvider(p) {
+  provider = p;
+  document.querySelectorAll('.pvr-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().startsWith(p));
+  });
+  const isOllama = p === 'Ollama';
+  document.getElementById('llmKeyLabel').textContent = isOllama ? 'OLLAMA URL' : 'API KEY';
+  document.getElementById('llmKey').type = isOllama ? 'text' : 'password';
+  document.getElementById('llmKey').placeholder = isOllama
+    ? 'http://localhost:11434  (blank = Fleet default)'
+    : 'Leave blank → use key from Fleet settings';
+}
+
+function setTarget(t) {
+  target = t;
+  document.querySelectorAll('.tgt-btn').forEach(b => {
+    const map = { online:'ONLINE ONLY', selected:'SELECTED', all:'ALL' };
+    b.classList.toggle('active', b.textContent.trim() === map[t]);
+  });
+}
+
+// ── Start / Stop ───────────────────────────────────────────────────────────
+async function startSession() {
+  const btn = document.querySelector('.btn-accent');
+  btn.textContent = '⏳ STARTING…';
+  btn.disabled = true;
+
+  try {
+    const rawUrls = document.getElementById('playlistUrls').value;
+    const playlists = rawUrls
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#') && l.length > 5);
+
+    if (!playlists.length) {
+      toast('⚠ Add at least one playlist URL');
+      return;
+    }
+
+    const listenMin = parseFloat(document.getElementById('listenMin').value) || 40;
+    const listenMax = parseFloat(document.getElementById('listenMax').value) || 60;
+    const tracksMin = parseInt(document.getElementById('tracksMin').value) || 15;
+    const tracksMax = parseInt(document.getElementById('tracksMax').value) || 20;
+    const duration  = parseFloat(document.getElementById('durationMin').value) || 120;
+    const llmSteps  = parseInt(document.getElementById('llmSteps').value) || 15;
+    const devConc   = parseInt(document.getElementById('devConcurrency').value) || 0;
+    const llmConc   = parseInt(document.getElementById('llmConcurrency').value) || 10;
+    const serials   = getSelectedSerials();
+    const llmKeyRaw = document.getElementById('llmKey').value.trim();
+    const llmModel  = document.getElementById('llmModel').value.trim() || null;
+
+    if (listenMin > listenMax) { toast('⚠ Listen min must be ≤ max'); return; }
+    if (tracksMin > tracksMax) { toast('⚠ Tracks min must be ≤ max'); return; }
+    if (target === 'selected' && !serials.length) { toast('⚠ Select at least one device'); return; }
+
+    toast(`⏳ Sending to ${NODE}/api/spotify/start (${playlists.length} playlist(s), target: ${target}, LLM: ${provider})…`);
+
+    const body = {
+      playlists,
+      listen_min_sec: listenMin,
+      listen_max_sec: listenMax,
+      tracks_min: tracksMin,
+      tracks_max: tracksMax,
+      total_duration_minutes: duration,
+      llm_max_steps_per_tick: llmSteps,
+      llm_concurrency: llmConc,
+      target,
+      serials,
+      concurrency: devConc,
+      llm_provider: provider,
+      llm_model: llmModel,
+      // For Ollama the field is the URL, for others it's the API key
+      llm_api_key:    provider !== 'Ollama' ? (llmKeyRaw || null) : null,
+      llm_ollama_url: provider === 'Ollama'  ? (llmKeyRaw || null) : null,
+    };
+
+    const r = await fetch(`${NODE}/api/spotify/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast('✗ ' + (d.error || 'Start failed')); return; }
+    toast(`▶ Session started on ${d.count} device(s) — ${duration}min`);
+    document.getElementById('btnStop').style.display = '';
+    d.started.forEach(serial => {
+      sessions[serial] = { phase: 'opening', progress: 2, logs: [] };
+    });
+    renderSessions();
+  } catch(e) {
+    toast('✗ ' + e.message);
+  } finally {
+    btn.textContent = '▶ START SESSION';
+    btn.disabled = false;
+  }
+}
+
+async function stopAll() {
+  try {
+    await fetch(`${NODE}/api/stop/all`, { method: 'POST' });
+    toast('⏹ Stop signal sent');
+    document.getElementById('btnStop').style.display = 'none';
+  } catch(e) { toast('✗ ' + e.message); }
+}
+
+async function stopSerial(serial) {
+  try {
+    await fetch(`${NODE}/api/stop/${serial}`, { method: 'POST' });
+    toast(`⏹ Stop sent to ${serial}`);
+  } catch(e) { toast('✗ ' + e.message); }
+}
+
+// ── Sessions render ────────────────────────────────────────────────────────
+function renderSessions() {
+  const wrap = document.getElementById('sessionsWrap');
+  const entries = Object.entries(sessions);
+  document.getElementById('sessCount').textContent =
+    entries.filter(([,s]) => s.phase !== 'done').length + ' running';
+
+  if (!entries.length) {
+    wrap.innerHTML = `
+      <div class="no-sessions">
+        <div class="no-sess-hex"></div>
+        <div class="no-sess-msg">NO ACTIVE SESSIONS<br>Start a session to monitor devices</div>
+      </div>`;
+    return;
+  }
+
+  wrap.innerHTML = entries.map(([serial, s]) => {
+    const logs = (s.logs || []).slice(0, 8).map(l =>
+      `<div class="sess-log-entry ${l.type || ''}">
+        <span class="sess-log-time">${l.time || ''}</span>
+        <span>${esc(l.msg || '')}</span>
+      </div>`
+    ).join('');
+    const statusLabel = {
+      not_started: 'WAITING', connecting: 'CONNECTING', opening: 'OPENING',
+      first_song: 'FIRST SONG', running: 'RUNNING', done: 'DONE',
+    };
+    const dev = devices[serial] || {};
+    const trackCount = s.totalTracks || 0;
+    const plSwitch   = s.plSwitches || 0;
+    const elapsed    = s.elapsedSec || 0;
+    const remaining  = s.remainingSec || 0;
+
+    return `
+      <div class="sess-card">
+        <div class="sess-hdr">
+          <span class="sess-serial">${esc(dev.name || serial)}</span>
+          <span class="sess-serial" style="font-size:8px;color:var(--muted)">${serial.slice(0,14)}</span>
+          <span class="sess-phase ${s.phase}">${statusLabel[s.phase] || s.phase.toUpperCase()}</span>
+          <button class="btn btn-danger" style="padding:2px 8px;font-size:8px;margin-left:8px" onclick="stopSerial('${serial}')">⏹</button>
+        </div>
+        <div class="sess-body">
+          <div class="sess-stat"><div class="ss-val">${trackCount}</div><div class="ss-lbl">TRACKS</div></div>
+          <div class="sess-stat"><div class="ss-val">${plSwitch}</div><div class="ss-lbl">PL SWITCHES</div></div>
+          <div class="sess-stat"><div class="ss-val">${fmtTime(elapsed)}</div><div class="ss-lbl">ELAPSED</div></div>
+          <div class="sess-stat"><div class="ss-val">${fmtTime(remaining)}</div><div class="ss-lbl">LEFT</div></div>
+        </div>
+        <div class="sess-bar-wrap">
+          <div class="sess-bar"><div class="sess-bar-fill" style="width:${s.progress || 0}%"></div></div>
+        </div>
+        <div class="sess-log">${logs}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Status poll (every 10 s) ───────────────────────────────────────────────
+async function syncStatusFromApi() {
+  try {
+    const r = await fetch(`${NODE}/api/spotify/status`);
+    const data = await r.json();
+    Object.entries(data).forEach(([serial, s]) => {
+      if (!sessions[serial]) sessions[serial] = { logs: [] };
+      sessions[serial].phase         = s.phase;
+      sessions[serial].progress      = s.progress;
+      sessions[serial].totalTracks   = s.total_tracks_played;
+      sessions[serial].plSwitches    = s.playlist_switches;
+      sessions[serial].elapsedSec    = s.elapsed_sec;
+      sessions[serial].remainingSec  = s.remaining_sec;
+    });
+    // Mark sessions that left the server (finished/errored) as done
+    const apiSerials = new Set(Object.keys(data));
+    Object.keys(sessions).forEach(s => {
+      if (!apiSerials.has(s) && sessions[s].phase !== 'done') {
+        sessions[s].phase = 'done';
+      }
+    });
+    renderSessions();
+  } catch {}
+}
+
+setInterval(syncStatusFromApi, 5000);
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtTime(sec) {
+  if (!sec) return '—';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// close modal on Esc (if added later)
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('btnStop').click?.();
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+initWS();
+</script>
+</body>
+</html>

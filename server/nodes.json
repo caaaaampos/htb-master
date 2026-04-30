@@ -1,0 +1,16 @@
+{
+  "RACK-01": {
+    "id": "RACK-01",
+    "name": "01",
+    "ip": "127.0.0.1",
+    "port": 8889,
+    "status": "online",
+    "devices": 0,
+    "hostname": "Franciscos-MacBook-Pro.local",
+    "last_seen": "14:34:57",
+    "registered_at": "2026-03-31T16:08:06.428092",
+    "token": "b675248587ce52da8da220ce6fdf4dc02c1633ef0d0a4cd7",
+    "provider": "OpenAI",
+    "model": "gpt-4o"
+  }
+}

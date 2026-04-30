@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HTB — SCREENWALL</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#000;--s1:#050a08;--faint:rgba(0,255,136,.05);
+  --accent:#00ff88;--accent2:#00aaff;--warn:#ff8800;--danger:#ff2244;
+  --dim:rgba(0,255,136,.6);--muted:rgba(0,255,136,.25);
+  --mono:'Share Tech Mono',monospace;--display:'Bebas Neue',sans-serif;--sans:'Rajdhani',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--accent);font-family:var(--mono);overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.01) 2px,rgba(0,255,136,.01) 3px);pointer-events:none;z-index:9999}
+
+/* HEADER */
+.hdr{position:fixed;top:0;left:0;right:0;height:54px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid rgba(0,255,136,.12);background:rgba(0,0,0,.96);z-index:100;gap:14px}
+.logo-hex{width:22px;height:22px;border:1px solid var(--accent);transform:rotate(45deg);box-shadow:0 0 8px rgba(0,255,136,.3);flex-shrink:0}
+.hdr-title{font-family:var(--display);font-size:19px;letter-spacing:.15em;text-shadow:0 0 12px rgba(0,255,136,.4)}
+.hdr-sub{font-size:7px;color:var(--muted);letter-spacing:.22em}
+.hdr-sep{width:1px;height:24px;background:rgba(0,255,136,.1);flex-shrink:0}
+.hdr-counters{display:flex;gap:18px}
+.hdr-counter{display:flex;flex-direction:column}
+.hdr-num{font-family:var(--display);font-size:22px;line-height:1;text-shadow:0 0 8px rgba(0,255,136,.3)}
+.hdr-num.blue{color:var(--accent2)}
+.hdr-num.red{color:var(--danger)}
+.hdr-label{font-size:6px;color:var(--muted);letter-spacing:.14em}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.ws-dot{width:6px;height:6px;border-radius:50%;background:var(--danger);flex-shrink:0}
+.ws-dot.on{background:var(--accent);box-shadow:0 0 5px rgba(0,255,136,.5);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-btn{font-family:var(--mono);font-size:8px;padding:4px 10px;border:1px solid rgba(0,255,136,.18);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:.08em;transition:all .15s}
+.hdr-btn:hover,.hdr-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,255,136,.07)}
+.hdr-clock{font-size:12px;color:var(--dim);letter-spacing:.08em;min-width:62px;text-align:right}
+
+/* LAYOUT */
+.layout{position:fixed;top:54px;bottom:64px;left:0;right:0;display:flex}
+
+/* SIDEBAR */
+.sidebar{width:188px;border-right:1px solid rgba(0,255,136,.1);background:var(--s1);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-title{font-size:7px;color:var(--muted);letter-spacing:.18em;padding:9px 12px 5px;border-bottom:1px solid rgba(0,255,136,.06)}
+.sidebar-racks{flex:1;overflow-y:auto;overflow-x:hidden}
+.sidebar-racks::-webkit-scrollbar{width:2px}
+.sidebar-racks::-webkit-scrollbar-thumb{background:rgba(0,255,136,.18)}
+.rack-item{padding:9px 12px;border-bottom:1px solid rgba(0,255,136,.04);cursor:pointer;transition:background .12s;border-left:2px solid transparent}
+.rack-item:hover{background:rgba(0,255,136,.04)}
+.rack-item.active{background:rgba(0,255,136,.06);border-left-color:var(--accent)}
+.rack-item-id{font-family:var(--display);font-size:15px;color:var(--accent);line-height:1}
+.rack-item-name{font-size:8px;color:var(--muted)}
+.rack-item-ip{font-size:7px;color:rgba(0,255,136,.18);margin-bottom:3px}
+.rack-mini-dots{display:flex;flex-wrap:wrap;gap:2px;margin:3px 0}
+.rmd{width:5px;height:5px;border-radius:1px}
+.rmd.online{background:var(--accent);box-shadow:0 0 2px rgba(0,255,136,.35)}
+.rmd.busy{background:var(--accent2);animation:blink 1s infinite}
+.rmd.offline{background:rgba(255,255,255,.06)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.rack-item-stats{display:flex;gap:6px}
+.ris{font-size:7px}
+.sidebar-footer{padding:7px 12px;border-top:1px solid rgba(0,255,136,.06)}
+.sf-label{font-size:6px;color:var(--muted);letter-spacing:.14em;margin-bottom:2px}
+.sf-val{font-size:8px;color:rgba(0,255,136,.35)}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.rack-hdr{padding:10px 16px;border-bottom:1px solid rgba(0,255,136,.07);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.rack-name{font-family:var(--display);font-size:26px;color:var(--accent);text-shadow:0 0 12px rgba(0,255,136,.3);letter-spacing:.07em}
+.rack-info{font-size:8px;color:var(--muted);margin-top:1px}
+.rack-hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.rack-hdr-stats{display:flex;gap:14px}
+.rhs{text-align:center}
+.rhs-val{font-family:var(--display);font-size:22px;line-height:1}
+.rhs-val.blue{color:var(--accent2)}
+.rhs-val.red{color:var(--danger)}
+.rhs-label{font-size:6px;color:var(--muted);letter-spacing:.1em}
+
+/* VIEW TOGGLE */
+.view-toggle{display:flex;gap:3px}
+.vtbtn{font-size:8px;padding:3px 9px;border:1px solid rgba(0,255,136,.14);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:.07em;transition:all .15s}
+.vtbtn:hover{border-color:rgba(0,255,136,.3);color:rgba(0,255,136,.65)}
+.vtbtn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,255,136,.07)}
+
+/* GRID WRAPPER */
+.grid-wrap{flex:1;overflow:hidden;position:relative}
+
+/* CARDS MODE */
+.device-grid{width:100%;height:100%;padding:10px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:5px;overflow-y:auto;align-content:start}
+.device-grid::-webkit-scrollbar{width:3px}
+.device-grid::-webkit-scrollbar-thumb{background:rgba(0,255,136,.15)}
+.dev-card{border:1px solid rgba(0,255,136,.07);background:var(--faint);padding:7px 9px;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:border-color .18s,background .18s}
+.dev-card:hover{border-color:rgba(0,255,136,.3);background:rgba(0,255,136,.07)}
+.dev-card.busy{border-color:rgba(0,170,255,.2);background:rgba(0,170,255,.04)}
+.dev-card.busy:hover{border-color:rgba(0,170,255,.4)}
+.dev-card.offline{opacity:.22;cursor:default}
+.dev-card.flash-on{animation:flashOn .5s ease}
+.dev-card.flash-off{animation:flashOff .5s ease}
+@keyframes flashOn{0%{border-color:var(--accent);box-shadow:0 0 14px rgba(0,255,136,.4)}100%{}}
+@keyframes flashOff{0%{border-color:var(--danger);box-shadow:0 0 14px rgba(255,34,68,.4)}100%{}}
+.dev-top{display:flex;align-items:center;gap:4px}
+.dev-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.dev-dot.online{background:var(--accent);box-shadow:0 0 3px rgba(0,255,136,.5);animation:pulse 2.5s infinite}
+.dev-dot.busy{background:var(--accent2);box-shadow:0 0 3px rgba(0,170,255,.5);animation:pulse .9s infinite}
+.dev-dot.offline{background:rgba(255,255,255,.1)}
+.dev-serial{font-size:7px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.dev-cam{font-size:8px;color:rgba(0,255,136,.3);transition:color .15s}
+.dev-cam:hover{color:var(--accent)}
+.dev-name{font-size:10px;color:rgba(0,255,136,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--sans);font-weight:600}
+.dev-task{font-size:8px;color:rgba(0,170,255,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:10px}
+.dev-prog-wrap{height:2px;background:rgba(0,255,136,.05);border-radius:1px;margin-top:1px}
+.dev-prog{height:100%;background:var(--accent2);border-radius:1px;transition:width .35s}
+
+/* COMPACT MODE */
+.device-grid.compact{grid-template-columns:repeat(auto-fill,minmax(30px,1fr));gap:3px;padding:10px 14px}
+.device-grid.compact .dev-card{padding:0;border:none;background:transparent;display:block;height:28px;width:100%}
+.device-grid.compact .dev-card:hover{background:transparent;border:none}
+.device-grid.compact .dev-card .dev-top,
+.device-grid.compact .dev-card .dev-name,
+.device-grid.compact .dev-card .dev-task,
+.device-grid.compact .dev-card .dev-prog-wrap{display:none!important}
+.device-grid.compact .dev-card .dev-compact-dot{display:flex!important}
+.dev-compact-dot{display:none;width:100%;height:28px;border-radius:2px;align-items:center;justify-content:center;font-size:6px;transition:background .25s,box-shadow .25s}
+.dev-card.online .dev-compact-dot{background:var(--accent);color:#000;box-shadow:0 0 4px rgba(0,255,136,.35)}
+.dev-card.busy .dev-compact-dot{background:var(--accent2);color:#000;box-shadow:0 0 6px rgba(0,170,255,.5);animation:blink 1s infinite}
+.dev-card.offline .dev-compact-dot{background:rgba(255,255,255,.06);color:rgba(255,255,255,.2)}
+
+/* EMPTY */
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none}
+.empty-hex{width:40px;height:40px;border:1px solid rgba(0,255,136,.14);transform:rotate(45deg)}
+.empty-title{font-family:var(--display);font-size:18px;color:rgba(0,255,136,.18);letter-spacing:.18em}
+.empty-sub{font-size:8px;color:rgba(0,255,136,.1);text-align:center;line-height:1.7}
+
+/* ACTIVITY */
+.activity{width:210px;border-left:1px solid rgba(0,255,136,.09);background:var(--s1);display:flex;flex-direction:column;flex-shrink:0}
+.activity-title{font-size:7px;color:var(--muted);letter-spacing:.18em;padding:9px 12px 5px;border-bottom:1px solid rgba(0,255,136,.06);display:flex;justify-content:space-between;align-items:center}
+.act-clear{font-size:7px;color:rgba(0,255,136,.18);cursor:pointer;letter-spacing:.08em}
+.act-clear:hover{color:var(--accent)}
+.alog{flex:1;overflow-y:auto;padding:4px 0}
+.alog::-webkit-scrollbar{width:2px}
+.alog::-webkit-scrollbar-thumb{background:rgba(0,255,136,.12)}
+.al-entry{padding:5px 12px;border-bottom:1px solid rgba(0,255,136,.03);animation:logIn .2s ease}
+@keyframes logIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.al-top{display:flex;align-items:center;gap:4px;margin-bottom:1px}
+.al-dot{width:4px;height:4px;border-radius:50%;flex-shrink:0}
+.al-dot.connect{background:var(--accent)}
+.al-dot.disconnect{background:var(--danger)}
+.al-dot.task{background:var(--accent2);animation:pulse 1s infinite}
+.al-dot.done{background:var(--accent)}
+.al-dot.error{background:var(--danger)}
+.al-dot.info{background:rgba(0,255,136,.2)}
+.al-rack{font-size:7px;color:var(--accent);flex:1}
+.al-time{font-size:7px;color:rgba(0,255,136,.15)}
+.al-msg{font-size:8px;color:rgba(0,255,136,.38);line-height:1.35;padding-left:8px}
+
+/* BOTTOM */
+.bottom{position:fixed;bottom:0;left:0;right:0;height:64px;border-top:1px solid rgba(0,255,136,.09);background:rgba(0,0,0,.97);display:flex;align-items:stretch;z-index:100}
+.bottom-log{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:2px;overflow:hidden}
+.bot-title{font-size:6px;color:var(--muted);letter-spacing:.16em}
+.ticker{display:flex;flex-direction:column;gap:1px;overflow:hidden;height:38px}
+.t-entry{display:flex;gap:8px;font-size:9px;white-space:nowrap;animation:tickIn .2s ease}
+@keyframes tickIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+.t-time{color:rgba(0,255,136,.18);flex-shrink:0}
+.t-rack{color:var(--accent);flex-shrink:0;min-width:52px}
+.t-msg{color:rgba(0,255,136,.35);overflow:hidden;text-overflow:ellipsis}
+.t-msg.ok{color:var(--accent)}.t-msg.err{color:var(--danger)}.t-msg.run{color:var(--accent2)}.t-msg.conn{color:#aaffcc}.t-msg.disc{color:var(--warn)}
+.bstats{display:flex;border-left:1px solid rgba(0,255,136,.07)}
+.bs{padding:0 16px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;border-right:1px solid rgba(0,255,136,.05)}
+.bs-val{font-family:var(--display);font-size:22px;color:var(--accent);line-height:1}
+.bs-label{font-size:6px;color:var(--muted);letter-spacing:.1em}
+
+/* ══ SCREEN VIEWER MODAL ══ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.screen-modal{background:#060d0a;border:1px solid rgba(0,255,136,.25);width:440px;display:flex;flex-direction:column;box-shadow:0 0 40px rgba(0,255,136,.1)}
+.sm-header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(0,255,136,.1)}
+.sm-title{font-family:var(--display);font-size:16px;letter-spacing:.1em;color:var(--accent);flex:1}
+.sm-info{font-size:8px;color:var(--muted)}
+.sm-status{width:6px;height:6px;border-radius:50%;background:var(--danger);flex-shrink:0}
+.sm-status.live{background:var(--accent);box-shadow:0 0 5px rgba(0,255,136,.5);animation:pulse .8s infinite}
+.sm-close{font-size:10px;color:rgba(0,255,136,.3);cursor:pointer;padding:4px 8px;border:1px solid rgba(0,255,136,.1);letter-spacing:.08em;transition:all .15s}
+.sm-close:hover{color:var(--accent);border-color:var(--accent)}
+.sm-screen{background:#000;position:relative;min-height:300px;display:flex;align-items:center;justify-content:center}
+.sm-screen img{max-width:100%;max-height:70vh;display:block;object-fit:contain}
+.sm-no-signal{text-align:center;padding:40px;color:rgba(0,255,136,.2)}
+.sm-no-signal .hex{width:36px;height:36px;border:1px solid rgba(0,255,136,.12);transform:rotate(45deg);margin:0 auto 14px}
+.sm-no-signal p{font-size:9px;letter-spacing:.1em}
+.sm-footer{padding:8px 14px;border-top:1px solid rgba(0,255,136,.08);display:flex;gap:8px;align-items:center}
+.sm-fps{font-size:8px;color:var(--muted)}
+.sm-serial-label{font-size:8px;color:rgba(0,255,136,.3);flex:1}
+.sm-btn{font-size:8px;padding:3px 10px;border:1px solid rgba(0,255,136,.15);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:.08em;transition:all .15s}
+.sm-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,255,136,.06)}
+
+/* Toast */
+.toast{position:fixed;top:62px;right:16px;background:rgba(0,18,10,.96);border:1px solid var(--accent);color:var(--accent);font-size:9px;padding:7px 14px;z-index:2000;letter-spacing:.07em;animation:toastIn .2s ease;box-shadow:0 0 16px rgba(0,255,136,.12)}
+@keyframes toastIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo-hex"></div>
+  <div><div class="hdr-title">HTB SCREENWALL</div><div class="hdr-sub">FLEET MONITOR</div></div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-counters">
+    <div class="hdr-counter"><div class="hdr-num" id="cntRacks">0</div><div class="hdr-label">RACKS</div></div>
+    <div class="hdr-counter"><div class="hdr-num" id="cntDevs">0</div><div class="hdr-label">DEVICES</div></div>
+    <div class="hdr-counter"><div class="hdr-num" id="cntOnline">0</div><div class="hdr-label">ONLINE</div></div>
+    <div class="hdr-counter"><div class="hdr-num blue" id="cntBusy">0</div><div class="hdr-label">RUNNING</div></div>
+    <div class="hdr-counter"><div class="hdr-num red" id="cntOff">0</div><div class="hdr-label">OFFLINE</div></div>
+  </div>
+  <div class="hdr-right">
+    <div class="ws-dot" id="wsDot"></div>
+    <span id="wsLabel" style="font-size:8px;color:var(--muted);letter-spacing:.08em">DISCONNECTED</span>
+    <div class="hdr-sep"></div>
+    <button class="hdr-btn" onclick="document.documentElement.requestFullscreen?.()">⛶ FULLSCREEN</button>
+    <div class="hdr-clock" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-title">▸ RACKS <span id="rackCount" style="color:var(--accent)">0</span></div>
+    <div class="sidebar-racks" id="sidebarRacks">
+      <div style="padding:18px 12px;font-size:8px;color:rgba(0,255,136,.12);text-align:center;line-height:1.8;letter-spacing:.08em">Waiting for<br>rack nodes...</div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="sf-label">MASTER</div>
+      <div class="sf-val" id="masterAddr">—</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="rack-hdr">
+      <div>
+        <div class="rack-name" id="rackName">SELECT A RACK</div>
+        <div class="rack-info" id="rackInfo">Click a rack on the sidebar</div>
+      </div>
+      <div class="rack-hdr-right">
+        <div class="view-toggle">
+          <button class="vtbtn active" id="btnCards" onclick="setView('cards')">⊟ CARDS</button>
+          <button class="vtbtn" id="btnCompact" onclick="setView('compact')">⊞ COMPACT</button>
+        </div>
+        <div class="hdr-sep"></div>
+        <div class="rack-hdr-stats">
+          <div class="rhs"><div class="rhs-val" id="rhsOn">—</div><div class="rhs-label">ONLINE</div></div>
+          <div class="rhs"><div class="rhs-val blue" id="rhsBusy">—</div><div class="rhs-label">RUNNING</div></div>
+          <div class="rhs"><div class="rhs-val red" id="rhsOff">—</div><div class="rhs-label">OFFLINE</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid-wrap">
+      <div class="device-grid" id="deviceGrid">
+        <div class="empty">
+          <div class="empty-hex"></div>
+          <div class="empty-title">NO RACK SELECTED</div>
+          <div class="empty-sub">Click a rack on the left<br>to view its devices</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVITY -->
+  <div class="activity">
+    <div class="activity-title">
+      <span>▸ ACTIVITY</span>
+      <span class="act-clear" onclick="document.getElementById('alog').innerHTML=''">CLEAR</span>
+    </div>
+    <div class="alog" id="alog"></div>
+  </div>
+
+</div>
+
+<!-- BOTTOM -->
+<div class="bottom">
+  <div class="bottom-log">
+    <div class="bot-title">▸ FLEET LOG</div>
+    <div class="ticker" id="ticker"></div>
+  </div>
+  <div class="bstats">
+    <div class="bs"><div class="bs-val" id="bsConn">0</div><div class="bs-label">CONNECTS</div></div>
+    <div class="bs"><div class="bs-val" id="bsDone">0</div><div class="bs-label">COMPLETED</div></div>
+    <div class="bs"><div class="bs-val" id="bsErr">0</div><div class="bs-label">ERRORS</div></div>
+    <div class="bs"><div class="bs-val" id="bsUp">00:00</div><div class="bs-label">UPTIME</div></div>
+  </div>
+</div>
+
+<!-- SCREEN VIEWER MODAL -->
+<div class="modal-overlay hidden" id="screenModal" onclick="closeScreen(event)">
+  <div class="screen-modal" onclick="event.stopPropagation()">
+    <div class="sm-header">
+      <div class="sm-status" id="smStatus"></div>
+      <div>
+        <div class="sm-title" id="smTitle">DEVICE SCREEN</div>
+        <div class="sm-info" id="smInfo">—</div>
+      </div>
+      <button class="sm-close" onclick="closeScreen()">✕ CLOSE</button>
+    </div>
+    <div class="sm-screen" id="smScreen">
+      <div class="sm-no-signal">
+        <div class="hex"></div>
+        <p>CONNECTING TO DEVICE...</p>
+      </div>
+    </div>
+    <div class="sm-footer">
+      <div class="sm-status" id="smStatusDot"></div>
+      <div class="sm-serial-label" id="smSerial">—</div>
+      <div class="sm-fps" id="smFps">— fps</div>
+      <button class="sm-btn" onclick="takeScreenshot()">📷 SNAPSHOT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const MASTER_IP = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? location.hostname : '192.168.2.42';
+const SCREENWALL_TOKEN = 'screenwall-htb-2024';
+const MASTER_WS = `ws://${MASTER_IP}:8888/ws?token=${SCREENWALL_TOKEN}`;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let nodes = {}, currentRack = null, viewMode = 'cards';
+let conn = 0, done = 0, errs = 0, startTime = Date.now();
+let screenWs = null, screenSerial = null, screenNodeIp = null, screenNodePort = null;
+let fpsCounter = 0, fpsTimer = null;
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  const ws = new WebSocket(MASTER_WS);
+  ws.onopen = () => {
+    set('wsDot', null, el => el.classList.add('on'));
+    set('wsLabel', 'LIVE');
+    set('masterAddr', `${MASTER_IP}:8888`);
+    addLog('SYSTEM', 'Connected to master', 'info');
+  };
+  ws.onclose = () => {
+    set('wsDot', null, el => el.classList.remove('on'));
+    set('wsLabel', 'RECONNECTING...');
+    addLog('SYSTEM', 'Connection lost — retrying...', 'error');
+    setTimeout(connect, 3000);
+  };
+  ws.onmessage = e => handleMsg(JSON.parse(e.data));
+  ws.onerror = () => ws.close();
+}
+
+function handleMsg(msg) {
+  const t = msg.type;
+  if (t === 'init' || t === 'nodes_update') {
+    (msg.nodes || []).forEach(n => { nodes[n.id] = { ...(nodes[n.id] || {}), ...n }; });
+    renderSidebar(); renderGrid(); updateCounters();
+  } else if (t === 'node_registered') {
+    nodes[msg.node.id] = msg.node;
+    addLog(msg.node.id, `✓ Rack registered — ${msg.node.hostname}`, 'info');
+    renderSidebar(); updateCounters(); toast(`Rack ${msg.node.id} connected`);
+  } else if (t === 'node_offline') {
+    if (nodes[msg.node_id]) { nodes[msg.node_id].status = 'offline'; renderSidebar(); updateCounters(); }
+  } else if (t === 'device_connected') {
+    conn++; set('bsConn', conn);
+    ensureDev(msg.node_id, msg.serial, { status: 'online', name: msg.name || msg.serial, task: 'idle', progress: 0 });
+    addLog(msg.node_id, `⬆ ${msg.serial} connected`, 'connect');
+    flash(msg.serial, 'flash-on'); renderGrid(); updateCounters();
+  } else if (t === 'device_disconnected') {
+    ensureDev(msg.node_id, msg.serial, { status: 'offline' });
+    addLog(msg.node_id, `⬇ ${msg.serial} disconnected`, 'disconnect');
+    flash(msg.serial, 'flash-off'); renderGrid(); updateCounters();
+  } else if (t === 'device_update') {
+    ensureDev(msg.node_id, msg.serial, msg); renderGrid(); updateCounters();
+  } else if (t === 'fleet_started') {
+    addLog('MASTER', `▶ "${msg.task}" → ${msg.nodes} racks`, 'task');
+  } else if (t === 'fleet_stopped') {
+    addLog('MASTER', '⏹ Fleet stopped', 'info');
+  } else if (t === 'task_complete') {
+    done++; set('bsDone', done);
+    ensureDev(msg.node_id, msg.serial, { status: 'online', task: 'idle', progress: 0 });
+    addLog(msg.node_id || 'NODE', `✓ ${msg.serial || 'device'} done`, 'done');
+    renderGrid(); updateCounters();
+  } else if (t === 'task_error') {
+    errs++; set('bsErr', errs);
+    addLog(msg.node_id || 'NODE', `✗ ${msg.serial || ''}: ${msg.error || 'error'}`, 'error');
+  } else if (t === 'server_log') {
+    addLog(msg.rack || 'NODE', msg.msg || '', msg.level === 'ERROR' ? 'error' : 'info');
+  }
+}
+
+function ensureDev(nodeId, serial, data) {
+  if (!nodeId || !serial) return;
+  if (!nodes[nodeId]) nodes[nodeId] = { id: nodeId, device_list: {} };
+  if (!nodes[nodeId].device_list) nodes[nodeId].device_list = {};
+  nodes[nodeId].device_list[serial] = { serial, ...(nodes[nodeId].device_list[serial] || {}), ...data };
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = Object.values(nodes);
+  set('rackCount', list.length);
+  const c = document.getElementById('sidebarRacks');
+  c.innerHTML = '';
+  if (!list.length) {
+    c.innerHTML = `<div style="padding:18px 12px;font-size:8px;color:rgba(0,255,136,.12);text-align:center;line-height:1.8">Waiting for<br>rack nodes...</div>`;
+    return;
+  }
+  list.forEach(n => {
+    const d = Object.values(n.device_list || {});
+    const tot = n.devices || d.length || 0;
+    const on = d.filter(x => x.status === 'online').length || (n.status === 'online' ? tot : 0);
+    const bsy = d.filter(x => x.status === 'busy').length;
+    const off = d.filter(x => x.status === 'offline').length;
+    let dots = '';
+    for (let i = 0; i < Math.min(tot, 28); i++) {
+      const st = d[i] ? d[i].status : (n.status === 'online' ? 'online' : 'offline');
+      dots += `<div class="rmd ${st}"></div>`;
+    }
+    const el = document.createElement('div');
+    el.className = `rack-item${currentRack === n.id ? ' active' : ''}`;
+    el.onclick = () => selectRack(n.id);
+    el.innerHTML = `<div class="rack-item-id">${n.id}</div><div class="rack-item-name">${n.name || n.id}</div><div class="rack-item-ip">${n.ip}:${n.port}</div><div class="rack-mini-dots">${dots}</div><div class="rack-item-stats"><span class="ris" style="color:var(--accent)">${on} ON</span><span class="ris" style="color:var(--accent2)">${bsy} RUN</span><span class="ris" style="color:rgba(255,255,255,.18)">${off} OFF</span></div>`;
+    c.appendChild(el);
+  });
+  if (!currentRack && list.length) selectRack(list[0].id);
+}
+
+// ── Select rack ───────────────────────────────────────────────────────────────
+function selectRack(id) {
+  currentRack = id;
+  const list = Object.values(nodes);
+  const n = nodes[id];
+  if (n && list.length > 80) setView('compact');
+  else if (n && list.length <= 80 && viewMode === 'compact') setView('cards');
+  renderSidebar(); renderGrid();
+}
+
+// ── View mode ─────────────────────────────────────────────────────────────────
+function setView(mode) {
+  viewMode = mode;
+  const grid = document.getElementById('deviceGrid');
+  grid.classList.toggle('compact', mode === 'compact');
+  document.getElementById('btnCards').classList.toggle('active', mode === 'cards');
+  document.getElementById('btnCompact').classList.toggle('active', mode === 'compact');
+  renderGrid();
+}
+
+// ── Device grid ───────────────────────────────────────────────────────────────
+function renderGrid() {
+  const grid = document.getElementById('deviceGrid');
+  const node = nodes[currentRack];
+  if (!currentRack || !node) {
+    grid.innerHTML = `<div class="empty"><div class="empty-hex"></div><div class="empty-title">NO RACK SELECTED</div><div class="empty-sub">Click a rack on the left<br>to view its devices</div></div>`;
+    set('rackName', 'SELECT A RACK'); set('rackInfo', 'Click a rack on the sidebar');
+    set('rhsOn', '—'); set('rhsBusy', '—'); set('rhsOff', '—');
+    return;
+  }
+  const devs = Object.values(node.device_list || {});
+  const tot = node.devices || devs.length || 0;
+  const on  = devs.filter(d => d.status === 'online').length  || (node.status === 'online' ? tot : 0);
+  const bsy = devs.filter(d => d.status === 'busy').length;
+  const off = devs.filter(d => d.status === 'offline').length;
+  set('rackName', node.id + (node.name && node.name !== node.id ? ` — ${node.name}` : ''));
+  set('rackInfo', `${node.ip}:${node.port} · ${node.hostname || ''} · ${tot} devices`);
+  set('rhsOn', on); set('rhsBusy', bsy); set('rhsOff', off);
+
+  const items = devs.length ? devs : Array.from({ length: tot }, (_, i) => ({
+    serial: `DEV-${String(i+1).padStart(3,'0')}`, name: `Device #${i+1}`,
+    status: node.status === 'online' ? 'online' : 'offline', task: 'idle', progress: 0
+  }));
+
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty"><div class="empty-hex"></div><div class="empty-title">NO DEVICES</div><div class="empty-sub">Connect Android devices<br>via ADB to this node</div></div>`;
+    return;
+  }
+
+  // Efficient DOM update
+  const existing = {};
+  grid.querySelectorAll('.dev-card').forEach(c => { existing[c.dataset.serial] = c; });
+  const toKeep = new Set(items.map(d => d.serial));
+  Object.keys(existing).forEach(s => { if (!toKeep.has(s)) existing[s].remove(); });
+
+  items.forEach((dev, i) => {
+    let card = existing[dev.serial];
+    const isNew = !card;
+    if (isNew) {
+      card = document.createElement('div');
+      card.dataset.serial = dev.serial;
+      grid.appendChild(card);
+    }
+    card.className = `dev-card ${dev.status}`;
+    if (isNew) card.style.animationDelay = `${Math.min(i * 0.005, 0.35)}s`;
+    card.onclick = () => dev.status !== 'offline' && openScreen(dev.serial, node.ip, node.port, dev.name || dev.serial);
+    card.title = dev.status !== 'offline' ? `Click to view screen` : '';
+    card.innerHTML = `
+      <div class="dev-compact-dot">${String(i+1).padStart(3,'0')}</div>
+      <div class="dev-top">
+        <div class="dev-dot ${dev.status}"></div>
+        <div class="dev-serial">${dev.serial}</div>
+        ${dev.status !== 'offline' ? `<span class="dev-cam" title="View screen">⊡</span>` : ''}
+      </div>
+      <div class="dev-name">${dev.name || dev.serial}</div>
+      <div class="dev-task">${dev.status === 'busy' ? '▶ ' + (dev.task || 'running') : '— idle'}</div>
+      <div class="dev-prog-wrap"><div class="dev-prog" style="width:${dev.progress || 0}%"></div></div>`;
+  });
+}
+
+// ── Flash ─────────────────────────────────────────────────────────────────────
+function flash(serial, cls) {
+  const c = document.querySelector(`[data-serial="${serial}"]`);
+  if (!c) return;
+  c.classList.remove('flash-on', 'flash-off');
+  void c.offsetWidth;
+  c.classList.add(cls);
+  setTimeout(() => c.classList.remove(cls), 600);
+}
+
+// ── Counters ──────────────────────────────────────────────────────────────────
+function updateCounters() {
+  const list = Object.values(nodes);
+  let tot = 0, on = 0, bsy = 0, off = 0;
+  list.forEach(n => {
+    const d = Object.values(n.device_list || {});
+    const cnt = n.devices || d.length || 0; tot += cnt;
+    on  += d.filter(x => x.status === 'online').length  || (n.status === 'online' ? cnt : 0);
+    bsy += d.filter(x => x.status === 'busy').length;
+    off += d.filter(x => x.status === 'offline').length;
+  });
+  set('cntRacks', list.length); set('cntDevs', tot);
+  set('cntOnline', on); set('cntBusy', bsy); set('cntOff', off);
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function addLog(rack, msg, type = 'info') {
+  const t = now();
+  const al = document.getElementById('alog');
+  const div = document.createElement('div'); div.className = 'al-entry';
+  div.innerHTML = `<div class="al-top"><div class="al-dot ${type}"></div><div class="al-rack">${esc(rack)}</div><div class="al-time">${t}</div></div><div class="al-msg">${esc(msg)}</div>`;
+  al.insertBefore(div, al.firstChild);
+  while (al.children.length > 120) al.removeChild(al.lastChild);
+  const tk = document.getElementById('ticker');
+  const cls = {connect:'conn',disconnect:'disc',error:'err',done:'ok',task:'run'}[type] || '';
+  const te = document.createElement('div'); te.className = 't-entry';
+  te.innerHTML = `<span class="t-time">${t}</span><span class="t-rack">${esc(rack)}</span><span class="t-msg ${cls}">${esc(msg)}</span>`;
+  tk.insertBefore(te, tk.firstChild);
+  while (tk.children.length > 3) tk.removeChild(tk.lastChild);
+}
+
+// ══ SCREEN VIEWER ═════════════════════════════════════════════════════════════
+function openScreen(serial, nodeIp, nodePort, name) {
+  closeScreenWs();
+  screenSerial = serial; screenNodeIp = nodeIp; screenNodePort = nodePort;
+
+  const modal = document.getElementById('screenModal');
+  set('smTitle', name || serial);
+  set('smInfo', `${nodeIp}:${nodePort}`);
+  set('smSerial', serial);
+  set('smFps', '— fps');
+  modal.classList.remove('hidden');
+
+  document.getElementById('smScreen').innerHTML = `<div class="sm-no-signal"><div class="hex"></div><p>CONNECTING TO ${esc(serial)}...</p></div>`;
+  document.getElementById('smStatus').className = 'sm-status';
+
+  // Connect to node's screen WebSocket
+  const wsUrl = `ws://${nodeIp}:${nodePort}/ws/screen/${serial}`;
+  screenWs = new WebSocket(wsUrl);
+  fpsCounter = 0;
+  fpsTimer = setInterval(() => {
+    set('smFps', `${fpsCounter} fps`);
+    fpsCounter = 0;
+  }, 1000);
+
+  screenWs.onopen = () => {
+    document.getElementById('smStatus').className = 'sm-status live';
+    addLog(currentRack || '?', `📺 Viewing ${serial}`, 'info');
+  };
+
+  screenWs.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'screen_frame' && msg.frame) {
+        fpsCounter++;
+        const screen = document.getElementById('smScreen');
+        let img = screen.querySelector('img');
+        if (!img) {
+          screen.innerHTML = '';
+          img = document.createElement('img');
+          screen.appendChild(img);
+        }
+        img.src = `data:image/png;base64,${msg.frame}`;
+      }
+    } catch {}
+  };
+
+  screenWs.onclose = () => {
+    document.getElementById('smStatus').className = 'sm-status';
+    clearInterval(fpsTimer);
+  };
+
+  // Timeout — if no frame in 5s show warning (not error)
+  const frameTimeout = setTimeout(() => {
+    if (!document.querySelector('#smScreen img')) {
+      document.getElementById('smScreen').innerHTML = `<div class="sm-no-signal"><div class="hex"></div><p>WAITING FOR FIRST FRAME...</p><p style="font-size:7px;margin-top:8px;opacity:.5">ADB screencap takes 1-3s on first connect</p></div>`;
+    }
+  }, 3000);
+
+  const origOnMessage = screenWs.onmessage;
+  screenWs.onmessage = e => {
+    clearTimeout(frameTimeout);
+    origOnMessage(e);
+  };
+
+  screenWs.onerror = () => {
+    clearTimeout(frameTimeout);
+    document.getElementById('smScreen').innerHTML = `<div class="sm-no-signal"><div class="hex"></div><p>COULD NOT CONNECT TO DEVICE</p></div>`;
+  };
+}
+
+function closeScreenWs() {
+  if (screenWs) { try { screenWs.close(); } catch {} screenWs = null; }
+  clearInterval(fpsTimer);
+}
+
+function closeScreen(e) {
+  if (e && e.target !== document.getElementById('screenModal')) return;
+  closeScreenWs();
+  document.getElementById('screenModal').classList.add('hidden');
+}
+
+function takeScreenshot() {
+  const img = document.querySelector('#smScreen img');
+  if (!img) return;
+  const a = document.createElement('a');
+  a.href = img.src;
+  a.download = `${screenSerial}-${Date.now()}.png`;
+  a.click();
+  toast(`📷 Screenshot saved — ${screenSerial}`);
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function set(id, val, fn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (fn) fn(el);
+  else el.textContent = val;
+}
+function now() { return new Date().toTimeString().slice(0, 8); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let toastTimer;
+function toast(msg) {
+  document.querySelector('.toast')?.remove();
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el?.remove(), 2600);
+}
+
+setInterval(() => {
+  set('clock', new Date().toTimeString().slice(0, 8));
+  const e = Math.floor((Date.now() - startTime) / 1000);
+  set('bsUp', `${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`);
+}, 1000);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeScreenWs(); document.getElementById('screenModal').classList.add('hidden'); }
+  if (e.key === 'f') document.documentElement.requestFullscreen?.();
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    const l = Object.values(nodes), i = l.findIndex(n => n.id === currentRack);
+    if (i < l.length - 1) selectRack(l[i+1].id);
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    const l = Object.values(nodes), i = l.findIndex(n => n.id === currentRack);
+    if (i > 0) selectRack(l[i-1].id);
+  }
+});
+
+connect();
+addLog('SYSTEM', `Connecting to ${MASTER_IP}:8888...`, 'info');
+</script>
+</body>
+</html>
