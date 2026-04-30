@@ -2,7 +2,7 @@
 Events for the ExecutorAgent workflow.
 
 Internal events for streaming to frontend/logging.
-For DroidAgent coordination events, see droid/events.py
+For MobileAgent coordination events, see droid/events.py
 """
 
 from typing import Dict, Optional

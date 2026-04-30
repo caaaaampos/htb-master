@@ -30,10 +30,11 @@ from htb_agent.agent.utils.inference import acall_with_retries
 from htb_agent.agent.utils.prompt_resolver import PromptResolver
 from htb_agent.config_manager.config_manager import AgentConfig
 from htb_agent.config_manager.prompt_loader import PromptLoader
+from htb_agent.tools.helpers.images import resize_image_to_max_side_with_grid
 
 if TYPE_CHECKING:
     from htb_agent.agent.action_context import ActionContext
-    from htb_agent.agent.droid import DroidAgentState
+    from htb_agent.agent.droid import MobileAgentState
     from htb_agent.agent.tool_registry import ToolRegistry
 
 logger = logging.getLogger("htb_agent")
@@ -55,7 +56,7 @@ class ExecutorAgent(Workflow):
         llm: LLM,
         registry: "ToolRegistry | None",
         action_ctx: "ActionContext | None",
-        shared_state: "DroidAgentState",
+        shared_state: "MobileAgentState",
         agent_config: AgentConfig,
         prompt_resolver: Optional[PromptResolver] = None,
         **kwargs,
@@ -95,9 +96,14 @@ class ExecutorAgent(Workflow):
                 )
             ]
 
-        # Get available secrets
+        # Get available secrets (only if type_secret is actually in the registry)
         available_secrets = []
-        if self.action_ctx and self.action_ctx.credential_manager:
+        if (
+            self.registry
+            and "type_secret" in self.registry.tools
+            and self.action_ctx
+            and self.action_ctx.credential_manager
+        ):
             available_secrets = await self.action_ctx.credential_manager.get_keys()
 
         # Build prompt variables
@@ -112,6 +118,7 @@ class ExecutorAgent(Workflow):
             "action_history": action_history,
             "available_secrets": available_secrets,
             "variables": self.shared_state.custom_variables,
+            "platform": self.shared_state.platform,
         }
 
         custom_prompt = self.prompt_resolver.get_prompt("executor_system")
@@ -130,6 +137,12 @@ class ExecutorAgent(Workflow):
         if self.vision:
             screenshot = self.shared_state.screenshot
             if screenshot is not None:
+                if getattr(
+                    self.action_ctx.state_provider,
+                    "requires_coordinate_tools",
+                    False,
+                ):
+                    screenshot = resize_image_to_max_side_with_grid(screenshot)
                 messages[0].blocks.append(ImageBlock(image=screenshot))
                 logger.debug("📸 Using screenshot for Executor")
             else:

@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import platformdirs
 from posthog import Posthog
 
 from htb_agent.telemetry.events import TelemetryEvent
@@ -20,11 +21,11 @@ htb_agent_logger = logging.getLogger("htb_agent")
 
 PROJECT_API_KEY = "phc_XyD3HKIsetZeRkmnfaBughs8fXWYArSUFc30C0HmRiO"
 HOST = "https://eu.i.posthog.com"
-USER_ID_PATH = Path.home() / ".htb_agent" / "user_id"
+USER_ID_PATH = Path(platformdirs.user_config_dir("htb_agent")) / "user_id"
 RUN_ID = str(uuid4())
 
 TELEMETRY_ENABLED_MESSAGE = "Anonymized telemetry enabled. See https://docs.hackthebox.com/v3/guides/telemetry for more information."
-TELEMETRY_DISABLED_MESSAGE = "🛑 Anonymized telemetry disabled. Consider setting the DROIDRUN_TELEMETRY_ENABLED environment variable to 'true' to enable telemetry and help us improve HTB Agent."
+TELEMETRY_DISABLED_MESSAGE = "🛑 Anonymized telemetry disabled. Consider setting the HTB_AGENT_TELEMETRY_ENABLED environment variable to 'true' to enable telemetry and help us improve HTB Agent."
 
 posthog = Posthog(
     project_api_key=PROJECT_API_KEY,
@@ -38,10 +39,15 @@ def is_telemetry_enabled():
     Check if telemetry is enabled via environment variable.
 
     Returns:
-        True if DROIDRUN_TELEMETRY_ENABLED is set to true/1/yes/y (case-insensitive),
+        True if HTB_AGENT_TELEMETRY_ENABLED is set to true/1/yes/y (case-insensitive),
         or if the environment variable is not set (default is enabled).
     """
-    telemetry_enabled = os.environ.get("DROIDRUN_TELEMETRY_ENABLED", "true")
+    telemetry_enabled = (
+        os.environ.get("HTB_AGENT_TELEMETRY_ENABLED")
+        or os.environ.get("MOBILERUN_TELEMETRY_ENABLED")
+        or os.environ.get("DROIDRUN_TELEMETRY_ENABLED")
+        or "true"
+    )
     enabled = telemetry_enabled.lower() in ["true", "1", "yes", "y"]
     logger.debug(f"Telemetry enabled: {enabled}")
     return enabled
@@ -51,7 +57,7 @@ def print_telemetry_message():
     """
     Print telemetry status message to the logger.
 
-    Displays enabled or disabled message based on DROIDRUN_TELEMETRY_ENABLED setting.
+    Displays enabled or disabled message based on HTB_AGENT_TELEMETRY_ENABLED setting.
     """
     if is_telemetry_enabled():
         htb_agent_logger.debug(TELEMETRY_ENABLED_MESSAGE)
@@ -77,7 +83,7 @@ def get_user_id() -> str:
     """
     Get or create persistent anonymous user ID.
 
-    The user ID is stored in ~/.htb_agent/user_id and persists across sessions.
+    The user ID is stored in the HTB Agent user config directory and persists across sessions.
     If the file doesn't exist or contains an invalid UUID, a new one is generated.
 
     Returns:

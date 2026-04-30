@@ -26,10 +26,11 @@ from htb_agent.agent.utils.prompt_resolver import PromptResolver
 from htb_agent.agent.utils.tracing_setup import record_langfuse_screenshot
 from htb_agent.config_manager.prompt_loader import PromptLoader
 from htb_agent.tools.driver.base import DeviceDisconnectedError
+from htb_agent.tools.helpers.images import resize_image_to_max_side_with_grid
 
 if TYPE_CHECKING:
     from htb_agent.agent.action_context import ActionContext
-    from htb_agent.agent.droid import DroidAgentState
+    from htb_agent.agent.droid import MobileAgentState
     from htb_agent.agent.tool_registry import ToolRegistry
     from htb_agent.config_manager.config_manager import AgentConfig, TracingConfig
     from htb_agent.tools.ui.provider import StateProvider
@@ -45,7 +46,7 @@ class StatelessManagerAgent(Workflow):
         action_ctx: "ActionContext | None",
         state_provider: "StateProvider | None",
         save_trajectory: str = "none",
-        shared_state: "DroidAgentState" = None,
+        shared_state: "MobileAgentState" = None,
         agent_config: "AgentConfig" = None,
         registry: "ToolRegistry | None" = None,
         output_model: Type[BaseModel] | None = None,
@@ -88,7 +89,7 @@ class StatelessManagerAgent(Workflow):
             )
         ]
 
-    async def _build_prompt(self, has_text_to_modify: bool) -> str:
+    async def _build_prompt(self) -> str:
         variables = {
             "instruction": self.shared_state.instruction,
             "device_date": self.shared_state.device_date,
@@ -99,8 +100,6 @@ class StatelessManagerAgent(Workflow):
             "progress_summary": self.shared_state.progress_summary,
             "action_history": self._build_action_history(),
             "current_state": self.shared_state.formatted_device_state,
-            "text_manipulation_enabled": has_text_to_modify
-            and self.agent_config.fast_agent.codeact,
         }
 
         custom_prompt = self.prompt_resolver.get_prompt("manager_system")
@@ -175,24 +174,6 @@ class StatelessManagerAgent(Workflow):
     async def prepare_context(
         self, ctx: Context, ev: StartEvent
     ) -> ManagerContextEvent:
-        ui_state = await self.state_provider.get_state()
-        self.action_ctx.ui = ui_state
-
-        self.shared_state.previous_formatted_device_state = (
-            self.shared_state.formatted_device_state
-        )
-        self.shared_state.formatted_device_state = ui_state.formatted_text
-        self.shared_state.focused_text = ui_state.focused_text
-        self.shared_state.a11y_tree = ui_state.elements
-        self.shared_state.phone_state = ui_state.phone_state
-
-        self.shared_state.update_current_app(
-            package_name=ui_state.phone_state.get("packageName", "Unknown"),
-            activity_name=ui_state.phone_state.get("currentApp", "Unknown"),
-        )
-
-        ctx.write_event_to_stream(RecordUIStateEvent(ui_state=ui_state.elements))
-
         screenshot = None
         if self.vision or self.save_trajectory != "none":
             try:
@@ -215,10 +196,24 @@ class StatelessManagerAgent(Workflow):
             except Exception as e:
                 logger.warning(f"Failed to capture screenshot: {e}")
 
-        focused_text_clean = self.shared_state.focused_text.replace("'", "").strip()
-        has_text_to_modify = focused_text_clean != ""
+        ui_state = await self.state_provider.get_state()
+        self.action_ctx.ui = ui_state
 
-        self.shared_state.has_text_to_modify = has_text_to_modify
+        self.shared_state.previous_formatted_device_state = (
+            self.shared_state.formatted_device_state
+        )
+        self.shared_state.formatted_device_state = ui_state.formatted_text
+        self.shared_state.focused_text = ui_state.focused_text
+        self.shared_state.a11y_tree = ui_state.elements
+        self.shared_state.phone_state = ui_state.phone_state
+
+        self.shared_state.update_current_app(
+            package_name=ui_state.phone_state.get("packageName", "Unknown"),
+            activity_name=ui_state.phone_state.get("currentApp", "Unknown"),
+        )
+
+        ctx.write_event_to_stream(RecordUIStateEvent(ui_state=ui_state.elements))
+
         self.shared_state.screenshot = screenshot
 
         event = ManagerContextEvent()
@@ -229,13 +224,14 @@ class StatelessManagerAgent(Workflow):
     async def get_response(
         self, ctx: Context, ev: ManagerContextEvent
     ) -> ManagerResponseEvent:
-        has_text_to_modify = self.shared_state.has_text_to_modify
         screenshot = self.shared_state.screenshot
 
-        prompt_text = await self._build_prompt(has_text_to_modify)
+        prompt_text = await self._build_prompt()
         messages = [{"role": "user", "content": [{"text": prompt_text}]}]
 
         if self.vision and screenshot:
+            if getattr(self.state_provider, "requires_coordinate_tools", False):
+                screenshot = resize_image_to_max_side_with_grid(screenshot)
             messages[0]["content"].append({"image": screenshot})
 
         chat_messages = to_chat_messages(messages)

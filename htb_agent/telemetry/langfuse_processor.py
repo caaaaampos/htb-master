@@ -40,21 +40,21 @@ from langfuse._client.span_processor import (
 from htb_agent import __version__
 
 if TYPE_CHECKING:
-    from htb_agent import DroidAgent
+    from htb_agent import MobileAgent
 
-_current_agent: ContextVar[Optional["DroidAgent"]] = ContextVar(
+_current_agent: ContextVar[Optional["MobileAgent"]] = ContextVar(
     "_current_agent", default=None
 )
 _root_span_context: ContextVar[Optional[Context]] = ContextVar(
     "_root_span_context", default=None
 )
-# Track last active step span (FastAgent/CodeAct/Manager/Executor) to parent screenshots
+# Track last active step span (FastAgent/Manager/Executor) to parent screenshots
 _last_step_span_context: ContextVar[Optional[Context]] = ContextVar(
     "_last_step_span_context", default=None
 )
 
 
-def set_current_agent(agent: "DroidAgent") -> None:
+def set_current_agent(agent: "MobileAgent") -> None:
     _current_agent.set(agent)
 
 
@@ -112,12 +112,12 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
         flush_interval: Optional[float] = None,
         blocked_instrumentation_scopes: Optional[List[str]] = None,
         additional_headers: Optional[dict] = None,
-        agent: Optional["DroidAgent"] = None,
+        agent: Optional["MobileAgent"] = None,
     ):
         """Initialize the span processor with media upload support.
 
         Args:
-            agent: Optional DroidAgent instance for accessing agent context during span processing.
+            agent: Optional MobileAgent instance for accessing agent context during span processing.
         """
         super().__init__(
             public_key=public_key,
@@ -160,7 +160,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
         self._pending_lock = threading.Lock()
 
     @property
-    def agent(self) -> Optional["DroidAgent"]:
+    def agent(self) -> Optional["MobileAgent"]:
         return _current_agent.get()
 
     def _extract_agent_input(self) -> Optional[dict]:
@@ -206,16 +206,14 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
 
             active_llms = []
             if self.agent.config.agent.reasoning:
-                # Reasoning mode uses manager, executor, scripter
+                # Reasoning mode uses manager, executor
                 llm_attrs = ["manager_llm", "executor_llm"]
-                if self.agent.config.agent.scripter.enabled:
-                    llm_attrs.append("scripter_llm")
             else:
                 # Direct mode uses fast_agent
                 llm_attrs = ["fast_agent_llm"]
 
             # Add helper LLMs
-            llm_attrs.extend(["text_manipulator_llm", "app_opener_llm"])
+            llm_attrs.append("app_opener_llm")
 
             # Add structured_output if output_model is present
             if self.agent.output_model:
@@ -427,7 +425,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
             if "input.value" in span._attributes:
                 del span._attributes["input.value"]
 
-            if span.name == "DroidAgent.run":
+            if span.name == "MobileAgent.run":
                 set_root_span_context(span)
                 span._attributes["langfuse.release"] = "v" + __version__
                 input_data = self._extract_agent_input()
@@ -445,7 +443,6 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
             elif span.name in (
                 "ManagerAgent.run",
                 "StatelessManagerAgent.run",
-                "CodeActAgent.run",
                 "FastAgent.run",
                 "ExecutorAgent.run",
             ):
@@ -467,7 +464,7 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
                         self.agent.shared_state.current_subgoal or "Unknown"
                     )
 
-                if span.name in ("FastAgent.run", "CodeActAgent.run"):
+                if span.name == "FastAgent.run":
                     input_data["fast_memory_count"] = len(
                         self.agent.shared_state.fast_memory
                     )
@@ -500,12 +497,11 @@ class LangfuseSpanProcessor(BaseLangfuseSpanProcessor):
                 ]
                 del span._attributes["output.value"]
             if span.name in (
-                "DroidAgent.run",
+                "MobileAgent.run",
                 "ManagerAgent.run",
                 "StatelessManagerAgent.run",
                 "ExecutorAgent.run",
                 "FastAgent.run",
-                "CodeActAgent.run",
             ):
                 if "input.value" in span._attributes:
                     del span._attributes["input.value"]

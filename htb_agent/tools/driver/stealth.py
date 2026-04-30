@@ -123,8 +123,16 @@ class StealthDriver:
         self.inner = inner
 
     @property
+    def platform(self) -> str:
+        return self.inner.platform
+
+    @property
     def supported(self) -> set[str]:
         return self.inner.supported
+
+    @property
+    def supported_buttons(self) -> set[str]:
+        return self.inner.supported_buttons
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.inner, name)

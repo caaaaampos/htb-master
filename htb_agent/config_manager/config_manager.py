@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import yaml
 
+from htb_agent.agent.providers.registry import VARIANT_ENV_KEY_SLOT
+from htb_agent.config_manager.env_keys import API_KEY_ENV_VARS, load_env_key_sources
 from htb_agent.config_manager.path_resolver import PathResolver
 from htb_agent.config_manager.safe_execution import SafeExecutionConfig
 from htb_agent.mcp.config import MCPConfig, MCPServerConfig
@@ -16,10 +18,14 @@ class LLMProfile:
     """LLM profile configuration."""
 
     provider: str = "GoogleGenAI"
-    model: str = "gemini-2.5-pro"
+    model: str = "gemini-3.1-flash-lite-preview"
     temperature: float = 0.2
+    api_key_source: Literal["auto", "env", "file"] = "auto"
     base_url: Optional[str] = None
     api_base: Optional[str] = None
+    provider_family: Optional[str] = None
+    auth_mode: Optional[str] = None
+    credential_path: Optional[str] = None
     kwargs: Dict[str, Any] = field(default_factory=dict)
 
     def to_load_llm_kwargs(self) -> Dict[str, Any]:
@@ -33,8 +39,38 @@ class LLMProfile:
             result["base_url"] = self.base_url
         if self.api_base:
             result["api_base"] = self.api_base
+        if self.credential_path:
+            result["credential_path"] = self.credential_path
         # Merge additional kwargs
         result.update(self.kwargs)
+        # OAuth providers handle auth via credential files, not API keys.
+        if self.auth_mode == "oauth":
+            return result
+        # Look up by provider name first (works for GoogleGenAI, Anthropic, etc.).
+        # Fall back to provider_family for transport-wrapped providers like
+        # MiniMax/ZAI that route through OpenAILike.
+        env_slot = VARIANT_ENV_KEY_SLOT.get(self.provider)
+        if env_slot is None and self.provider_family in API_KEY_ENV_VARS:
+            env_slot = self.provider_family
+        if env_slot and "api_key" not in result:
+            sources = load_env_key_sources().get(env_slot)
+            if sources is not None:
+                if self.api_key_source == "env":
+                    api_key = sources.shell
+                elif self.api_key_source == "file":
+                    api_key = sources.saved
+                else:
+                    api_key = sources.saved or sources.shell
+
+                if api_key:
+                    result["api_key"] = api_key
+                else:
+                    env_var = API_KEY_ENV_VARS.get(env_slot, env_slot.upper())
+                    raise ValueError(
+                        f"No API key found for provider '{self.provider}'. "
+                        f"Set {env_var}, save a key in the env file, or switch "
+                        f"api_key_source to 'env'/'file'."
+                    )
         return result
 
 
@@ -43,8 +79,8 @@ class FastAgentConfig:
     vision: bool = False
     codeact: bool = False
     parallel_tools: bool = True
-    system_prompt: str = "config/prompts/codeact/tools_system.jinja2"
-    user_prompt: str = "config/prompts/codeact/tools_user.jinja2"
+    system_prompt: str = "config/prompts/fast_agent/system.jinja2"
+    user_prompt: str = "config/prompts/fast_agent/user.jinja2"
     safe_execution: bool = False
     execution_timeout: float = 50.0
 
@@ -89,6 +125,7 @@ class AgentConfig:
     max_steps: int = 15
     reasoning: bool = False
     streaming: bool = True
+    vision_only: bool = False
     after_sleep_action: float = 1.0
     wait_for_stable_ui: float = 0.3
     use_normalized_coordinates: bool = False
@@ -120,6 +157,8 @@ class DeviceConfig:
     """Device-related configuration."""
 
     serial: Optional[str] = None
+    control_backend: Optional[str] = None
+    device_id: str = "auto"
     use_tcp: bool = False
     platform: str = "android"  # "android" or "ios"
     auto_setup: bool = True  # auto-install/fix portal before each run
@@ -180,7 +219,7 @@ class CredentialsConfig:
 
 
 @dataclass
-class DroidrunConfig:
+class MobileConfig:
     """Complete HTB Agent configuration schema."""
 
     agent: AgentConfig = field(default_factory=AgentConfig)
@@ -206,43 +245,31 @@ class DroidrunConfig:
         return {
             "manager": LLMProfile(
                 provider="GoogleGenAI",
-                model="gemini-2.5-pro",
+                model="gemini-3.1-flash-lite-preview",
                 temperature=0.2,
                 kwargs={},
             ),
             "executor": LLMProfile(
                 provider="GoogleGenAI",
-                model="gemini-2.5-pro",
+                model="gemini-3.1-flash-lite-preview",
                 temperature=0.1,
                 kwargs={},
             ),
             "fast_agent": LLMProfile(
                 provider="GoogleGenAI",
-                model="gemini-2.5-pro",
+                model="gemini-3.1-flash-lite-preview",
                 temperature=0.2,
-                kwargs={},
-            ),
-            "text_manipulator": LLMProfile(
-                provider="GoogleGenAI",
-                model="gemini-2.5-pro",
-                temperature=0.3,
                 kwargs={},
             ),
             "app_opener": LLMProfile(
                 provider="GoogleGenAI",
-                model="gemini-2.5-pro",
+                model="gemini-3.1-flash-lite-preview",
                 temperature=0.0,
-                kwargs={},
-            ),
-            "scripter": LLMProfile(
-                provider="GoogleGenAI",
-                model="gemini-2.5-flash",
-                temperature=0.1,
                 kwargs={},
             ),
             "structured_output": LLMProfile(
                 provider="GoogleGenAI",
-                model="gemini-2.5-flash",
+                model="gemini-3.1-flash-lite-preview",
                 temperature=0.0,
                 kwargs={},
             ),
@@ -255,11 +282,10 @@ class DroidrunConfig:
         result["llm_profiles"] = {
             name: asdict(profile) for name, profile in self.llm_profiles.items()
         }
-        # safe_execution is already converted by asdict
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DroidrunConfig":
+    def from_dict(cls, data: Dict[str, Any]) -> "MobileConfig":
         """Create config from dictionary."""
         # Parse LLM profiles
         llm_profiles = {}
@@ -284,9 +310,9 @@ class DroidrunConfig:
             ExecutorConfig(**executor_data) if executor_data else ExecutorConfig()
         )
 
-        script_data = agent_data.get("scripter", {})
+        scripter_data = agent_data.get("scripter", {})
         scripter_config = (
-            ScripterConfig(**script_data) if script_data else ScripterConfig()
+            ScripterConfig(**scripter_data) if scripter_data else ScripterConfig()
         )
 
         app_cards_data = agent_data.get("app_cards", {})
@@ -299,6 +325,7 @@ class DroidrunConfig:
             max_steps=agent_data.get("max_steps", 15),
             reasoning=agent_data.get("reasoning", False),
             streaming=agent_data.get("streaming", False),
+            vision_only=agent_data.get("vision_only", False),
             after_sleep_action=agent_data.get("after_sleep_action", 1.0),
             wait_for_stable_ui=agent_data.get("wait_for_stable_ui", 0.3),
             use_normalized_coordinates=agent_data.get(
@@ -309,13 +336,6 @@ class DroidrunConfig:
             executor=executor_config,
             scripter=scripter_config,
             app_cards=app_cards_config,
-        )
-
-        safe_exec_data = data.get("safe_execution", {})
-        safe_execution_config = (
-            SafeExecutionConfig(**safe_exec_data)
-            if safe_exec_data
-            else SafeExecutionConfig()
         )
 
         # External agents config - just pass through as-is
@@ -349,13 +369,13 @@ class DroidrunConfig:
             logging=LoggingConfig(**data.get("logging", {})),
             tools=ToolsConfig(**data.get("tools", {})),
             credentials=CredentialsConfig(**data.get("credentials", {})),
-            safe_execution=safe_execution_config,
+            safe_execution=SafeExecutionConfig(**data.get("safe_execution", {})),
             external_agents=external_agents,
             mcp=mcp_config,
         )
 
     @classmethod
-    def from_yaml(cls, path: str) -> "DroidrunConfig":
+    def from_yaml(cls, path: str) -> "MobileConfig":
         """
         Load config from YAML file.
 
@@ -363,7 +383,7 @@ class DroidrunConfig:
             path: Path to config file (relative to CWD or absolute)
 
         Returns:
-            DroidrunConfig instance
+            MobileConfig instance
 
         Raises:
             FileNotFoundError: If file doesn't exist
@@ -372,3 +392,8 @@ class DroidrunConfig:
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return cls.from_dict(data)
+
+
+# Legacy alias — deprecated, will be removed in v0.8.0
+DroidConfig = MobileConfig
+DroidrunConfig = MobileConfig

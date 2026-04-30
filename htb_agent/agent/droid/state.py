@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Dict, List, Optional
+from uuid import uuid4
 
 from llama_index.core.base.llms.types import ChatMessage
 from pydantic import BaseModel, ConfigDict, Field
@@ -8,9 +9,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from htb_agent.telemetry import PackageVisitEvent, capture
 
 
-class DroidAgentState(BaseModel):
+class QueuedUserMessage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    message: str
+    queued_at_step: int = 0
+
+
+class MobileAgentState(BaseModel):
     """
-    State model for DroidAgent workflow - shared across parent and child workflows.
+    State model for MobileAgent workflow - shared across parent and child workflows.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -19,6 +26,7 @@ class DroidAgentState(BaseModel):
     step_number: int = 0
     runtype: str = "developer"
     user_id: str | None = None
+    platform: str = "Android"
 
     # ========================================================================
     # Device State (current)
@@ -76,12 +84,10 @@ class DroidAgentState(BaseModel):
     # Memory
     # ========================================================================
     manager_memory: str = ""  # Manager's planning notes (append-only string)
-    fast_memory: List[str] = Field(
-        default_factory=list
-    )  # FastAgent/CodeAct remember() items
+    fast_memory: List[str] = Field(default_factory=list)  # FastAgent remember() items
 
     # ========================================================================
-    # Completion State (set by complete() tool, checked by FastAgent/CodeAct)
+    # Completion State (set by complete() tool, checked by FastAgent)
     # ========================================================================
     finished: bool = False
     success: Optional[bool] = None
@@ -98,18 +104,10 @@ class DroidAgentState(BaseModel):
     err_to_manager_thresh: int = 2
 
     # ========================================================================
-    # Script Execution Tracking
+    # External User Messages (mid-run injection queue)
     # ========================================================================
-    scripter_history: List[Dict] = Field(default_factory=list)
-    last_scripter_message: str = ""
-    last_scripter_success: bool = True
-
-    # ========================================================================
-    # Text Manipulation Tracking
-    # ========================================================================
-    has_text_to_modify: bool = False
-    text_manipulation_history: List[Dict] = Field(default_factory=list)
-    last_text_manipulation_success: bool = False
+    pending_user_messages: List[QueuedUserMessage] = Field(default_factory=list)
+    workflow_completed: bool = False
 
     # ========================================================================
     # Custom Variables (user-defined)
@@ -122,7 +120,7 @@ class DroidAgentState(BaseModel):
     # ========================================================================
 
     async def remember(self, information: str) -> str:
-        """Store information in fast_memory for FastAgent/CodeAct context."""
+        """Store information in fast_memory for FastAgent context."""
         if (
             not information
             or not isinstance(information, str)
@@ -149,29 +147,57 @@ class DroidAgentState(BaseModel):
         self.success = success
         self.answer = answer or "Task completed successfully."
 
+    def queue_user_message(self, message: str) -> QueuedUserMessage:
+        if not message or not message.strip():
+            raise ValueError("Cannot queue an empty or whitespace-only message.")
+        if self.workflow_completed:
+            raise RuntimeError("Cannot queue messages: agent has already finished.")
+        queued = QueuedUserMessage(message=message, queued_at_step=self.step_number)
+        self.pending_user_messages.append(queued)
+        return queued
+
+    def drain_user_messages(self) -> list[QueuedUserMessage]:
+        if not self.pending_user_messages:
+            return []
+        messages = list(self.pending_user_messages)
+        self.pending_user_messages.clear()
+        return messages
+
     def update_current_app(self, package_name: str, activity_name: str):
         """
         Update package and activity together, capturing telemetry event only once.
+        Skips empty values — won't overwrite a known package/activity with "".
         """
-        package_changed = package_name != self.current_package_name
-        activity_changed = activity_name != self.current_activity_name
+        package_name = package_name.strip() if package_name else ""
+        activity_name = activity_name.strip() if activity_name else ""
+
+        # Don't overwrite known values with empty strings
+        effective_package = package_name or self.current_package_name
+        effective_activity = activity_name or self.current_activity_name
+
+        package_changed = effective_package != self.current_package_name
+        activity_changed = effective_activity != self.current_activity_name
 
         if not (package_changed or activity_changed):
             return
 
-        if package_changed and package_name:
-            self.visited_packages.add(package_name)
-        if activity_changed and activity_name:
-            self.visited_activities.add(activity_name)
+        if package_changed and effective_package:
+            self.visited_packages.add(effective_package)
+        if activity_changed and effective_activity:
+            self.visited_activities.add(effective_activity)
 
-        self.current_package_name = package_name
-        self.current_activity_name = activity_name
+        self.current_package_name = effective_package
+        self.current_activity_name = effective_activity
 
         capture(
             PackageVisitEvent(
-                package_name=package_name or "Unknown",
-                activity_name=activity_name or "Unknown",
+                package_name=effective_package or "Unknown",
+                activity_name=effective_activity or "Unknown",
                 step_number=self.step_number,
             ),
             user_id=self.user_id,
         )
+
+
+# Legacy alias — deprecated, will be removed in v0.8.0
+DroidAgentState = MobileAgentState

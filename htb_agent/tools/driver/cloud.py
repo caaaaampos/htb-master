@@ -1,6 +1,6 @@
 """CloudDriver — MobileRun cloud device driver.
 
-Wraps the ``mobilerun`` SDK (``AsyncMobilerun``) to provide device I/O
+Wraps the ``mobilerun_sdk`` SDK (``AsyncMobilerun``) to provide device I/O
 for cloud-hosted devices via the MobileRun API.
 """
 
@@ -9,8 +9,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Awaitable, Dict, List, Optional, TypeVar
 
-from mobilerun import AsyncMobilerun
-from mobilerun._exceptions import APIConnectionError, APITimeoutError, ConflictError
+try:
+    from mobilerun_sdk import AsyncMobilerun
+    from mobilerun_sdk._exceptions import APIConnectionError, APITimeoutError, ConflictError
+except ImportError:  # pragma: no cover - compatibility with pre-rename SDK installs.
+    from mobilerun import AsyncMobilerun
+    from mobilerun._exceptions import APIConnectionError, APITimeoutError, ConflictError
 
 from htb_agent.tools.driver.base import DeviceDisconnectedError, DeviceDriver
 
@@ -22,11 +26,13 @@ T = TypeVar("T")
 class CloudDriver(DeviceDriver):
     """Cloud device I/O via the MobileRun SDK."""
 
+    platform = "Android"
+
     supported = {
         "tap",
         "swipe",
         "input_text",
-        "press_key",
+        "press_button",
         "start_app",
         "screenshot",
         "get_ui_tree",
@@ -35,9 +41,13 @@ class CloudDriver(DeviceDriver):
         "list_packages",
     }
 
-    # MobileRun global action codes (accessibility service)
-    _GLOBAL_BACK = 1
-    _GLOBAL_HOME = 2
+    supported_buttons = {"back", "home", "enter"}
+
+    _BUTTON_ACTIONS = {
+        "back": 1,  # global action: BACK
+        "home": 2,  # global action: HOME
+        "enter": 66,  # keycode passthrough
+    }
 
     def __init__(
         self,
@@ -46,9 +56,11 @@ class CloudDriver(DeviceDriver):
         api_key: str | None = None,
         base_url: str = "https://api.mobilerun.com/v1",
         user_id: str | None = None,
+        stealth: bool = False,
     ) -> None:
         self.device_id = device_id
         self.display_id = display_id
+        self._stealth = stealth
 
         if user_id:
             self._client = AsyncMobilerun(
@@ -71,6 +83,11 @@ class CloudDriver(DeviceDriver):
         """Common keyword arg for display routing."""
         return {"x_device_display_id": self.display_id}
 
+    @property
+    def _stealth_extra(self) -> dict | None:
+        """Extra body for stealth mode (tap/swipe)."""
+        return {"stealth": True} if self._stealth else None
+
     async def _call(self, coro: Awaitable[T]) -> T:
         """Await an SDK coroutine, translating disconnect errors."""
         try:
@@ -91,7 +108,11 @@ class CloudDriver(DeviceDriver):
     async def tap(self, x: int, y: int) -> None:
         await self._call(
             self._client.devices.actions.tap(
-                self.device_id, x=x, y=y, **self._display_kw
+                self.device_id,
+                x=x,
+                y=y,
+                extra_body=self._stealth_extra,
+                **self._display_kw,
             )
         )
 
@@ -111,28 +132,49 @@ class CloudDriver(DeviceDriver):
                 end_x=x2,
                 end_y=y2,
                 duration=duration_ms,
+                extra_body=self._stealth_extra,
                 **self._display_kw,
             )
         )
 
-    async def input_text(self, text: str, clear: bool = False) -> bool:
+    async def input_text(
+        self,
+        text: str,
+        clear: bool = False,
+        stealth: bool = False,
+        wpm: int = 0,
+    ) -> bool:
+        extra_body: dict = {}
+        if self._stealth or stealth:
+            extra_body["stealth"] = True
+        if wpm:
+            extra_body["wpm"] = wpm
         await self._call(
             self._client.devices.keyboard.write(
-                self.device_id, text=text, clear=clear, **self._display_kw
+                self.device_id,
+                text=text,
+                clear=clear,
+                extra_body=extra_body or None,
+                **self._display_kw,
             )
         )
         return True
 
-    async def press_key(self, keycode: int) -> None:
-        # Map Android keycodes to MobileRun global actions where needed
-        if keycode == 4:  # KEYCODE_BACK
-            await self.global_action(self._GLOBAL_BACK)
-        elif keycode == 3:  # KEYCODE_HOME
-            await self.global_action(self._GLOBAL_HOME)
+    async def press_button(self, button: str) -> None:
+        button_lower = button.lower()
+        if button_lower not in self.supported_buttons:
+            raise ValueError(
+                f"Button '{button}' not supported. "
+                f"Supported: {', '.join(sorted(self.supported_buttons))}"
+            )
+        if button_lower in ("back", "home"):
+            await self.global_action(self._BUTTON_ACTIONS[button_lower])
         else:
             await self._call(
                 self._client.devices.keyboard.key(
-                    self.device_id, key=keycode, **self._display_kw
+                    self.device_id,
+                    key=self._BUTTON_ACTIONS[button_lower],
+                    **self._display_kw,
                 )
             )
 

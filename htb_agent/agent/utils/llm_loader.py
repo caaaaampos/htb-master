@@ -12,13 +12,13 @@ from llama_index.core.llms.llm import LLM
 from pydantic import BaseModel
 
 from htb_agent.agent.utils.llm_picker import load_llm, load_llms_from_profiles
-from htb_agent.config_manager.config_manager import DroidrunConfig
+from htb_agent.config_manager.config_manager import MobileConfig
 
 logger = logging.getLogger("htb_agent")
 
 
 def _get_required_profiles(
-    config: DroidrunConfig, output_model: Type[BaseModel] | None = None
+    config: MobileConfig, output_model: Type[BaseModel] | None = None
 ) -> List[str]:
     """
     Determine which LLM profiles are required based on agent configuration.
@@ -31,9 +31,7 @@ def _get_required_profiles(
         List of required profile names
     """
     if config.agent.reasoning:
-        profiles = ["manager", "executor", "text_manipulator", "app_opener"]
-        if config.agent.scripter.enabled:
-            profiles.append("scripter")
+        profiles = ["manager", "executor", "app_opener"]
     else:
         # Direct execution mode only needs FastAgent and helper agents
         profiles = ["fast_agent", "app_opener"]
@@ -46,7 +44,7 @@ def _get_required_profiles(
 
 
 def validate_llm_dict(
-    config: DroidrunConfig,
+    config: MobileConfig,
     llms: dict[str, LLM],
     output_model: Type[BaseModel] | None = None,
 ) -> List[str]:
@@ -79,7 +77,7 @@ def validate_llm_dict(
 
 
 def validate_llm_profiles(
-    config: DroidrunConfig, output_model: Type[BaseModel] | None = None
+    config: MobileConfig, output_model: Type[BaseModel] | None = None
 ) -> List[str]:
     """
     Validate that required LLM profiles exist in the configuration.
@@ -111,7 +109,7 @@ def validate_llm_profiles(
 
 
 def load_agent_llms(
-    config: DroidrunConfig,
+    config: MobileConfig,
     custom_provider: str | None = None,
     custom_model: str | None = None,
     temperature: float | None = None,
@@ -119,7 +117,7 @@ def load_agent_llms(
     **kwargs: Any,
 ) -> dict[str, LLM]:
     """
-    Load LLMs required for DroidAgent based on reasoning mode and configuration.
+    Load LLMs required for MobileAgent based on reasoning mode and configuration.
 
     Args:
         config: HTB Agent configuration containing LLM profiles
@@ -131,8 +129,8 @@ def load_agent_llms(
 
     Returns:
         Dictionary mapping agent type to LLM instance:
-        - If reasoning=True: {manager, executor, text_manipulator, app_opener, scripter, structured_output?}
-        - If reasoning=False: {fast_agent, text_manipulator, app_opener, structured_output?}
+        - If reasoning=True: {manager, executor, app_opener, structured_output?}
+        - If reasoning=False: {fast_agent, app_opener, structured_output?}
         - structured_output is only included if output_model is provided
 
     Raises:
@@ -168,9 +166,7 @@ def load_agent_llms(
             "manager": custom_llm,
             "executor": custom_llm,
             "fast_agent": custom_llm,
-            "text_manipulator": custom_llm,
             "app_opener": custom_llm,
-            "scripter": custom_llm,
         }
 
         # Add structured_output if output_model is provided
@@ -208,7 +204,7 @@ def load_agent_llms(
 
 
 def merge_llms_with_config(
-    config: DroidrunConfig,
+    config: MobileConfig,
     llms: dict[str, LLM],
     output_model: Type[BaseModel] | None = None,
     **kwargs: Any,

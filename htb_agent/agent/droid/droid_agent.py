@@ -1,9 +1,9 @@
 """
-DroidAgent - A wrapper class that coordinates the planning and execution of tasks
-to achieve a user's goal on an Android device.
+MobileAgent - A wrapper class that coordinates the planning and execution of tasks
+to achieve a user's goal on a mobile device.
 
 Architecture:
-- When reasoning=False: Uses CodeActAgent directly
+- When reasoning=False: Uses FastAgent directly
 - When reasoning=True: Uses Manager (planning) + Executor (action) workflows
 """
 
@@ -21,42 +21,32 @@ from workflows.events import Event
 from workflows.handler import WorkflowHandler
 
 from htb_agent.agent.action_context import ActionContext
-from htb_agent.agent.codeact import CodeActAgent, FastAgent
-from htb_agent.agent.codeact.events import CodeActOutputEvent, FastAgentOutputEvent
 from htb_agent.agent.common.events import RecordUIStateEvent, ScreenshotEvent
 from htb_agent.agent.droid.events import (
     ExecutorInputEvent,
     ExecutorResultEvent,
+    ExternalUserMessageDroppedEvent,
     FastAgentExecuteEvent,
     FastAgentResultEvent,
     FinalizeEvent,
     ManagerInputEvent,
     ManagerPlanEvent,
     ResultEvent,
-    ScripterExecutorInputEvent,
-    ScripterExecutorResultEvent,
-    TextManipulatorInputEvent,
-    TextManipulatorResultEvent,
 )
-from htb_agent.agent.droid.state import DroidAgentState
+from htb_agent.agent.droid.state import MobileAgentState, QueuedUserMessage
 from htb_agent.agent.executor import ExecutorAgent
 from htb_agent.agent.external import load_agent
+from htb_agent.agent.fast_agent import FastAgent
+from htb_agent.agent.fast_agent.events import FastAgentOutputEvent
 from htb_agent.agent.manager import ManagerAgent, StatelessManagerAgent
 from htb_agent.agent.oneflows.structured_output_agent import StructuredOutputAgent
-from htb_agent.agent.oneflows.text_manipulator import run_text_manipulation_agent
-from htb_agent.agent.scripter import ScripterAgent
-from htb_agent.agent.tool_registry import ToolRegistry
 from htb_agent.agent.trajectory import TrajectoryWriter
-from htb_agent.agent.utils.actions import complete, open_app, remember
 from htb_agent.agent.utils.llm_loader import (
     load_agent_llms,
     merge_llms_with_config,
 )
 from htb_agent.agent.utils.prompt_resolver import PromptResolver
-from htb_agent.agent.utils.signatures import (
-    ATOMIC_ACTION_SIGNATURES,
-    build_credential_tools,
-)
+from htb_agent.agent.utils.signatures import build_tool_registry
 from htb_agent.agent.utils.tracing_setup import (
     apply_session_context,
     record_langfuse_screenshot,
@@ -67,13 +57,12 @@ from htb_agent.config_manager.config_manager import (
     AgentConfig,
     CredentialsConfig,
     DeviceConfig,
-    DroidrunConfig,
     LoggingConfig,
+    MobileConfig,
     TelemetryConfig,
     ToolsConfig,
     TracingConfig,
 )
-from htb_agent.config_manager.safe_execution import SafeExecutionConfig
 from htb_agent.credential_manager import CredentialManager, FileCredentialManager
 from htb_agent.log_handlers import CLILogHandler, configure_logging
 from htb_agent.mcp.adapter import mcp_to_htb_agent_tools
@@ -81,20 +70,26 @@ from htb_agent.mcp.client import MCPClientManager
 from htb_agent.mcp.config import MCPConfig
 from htb_agent.portal import ensure_portal_ready
 from htb_agent.telemetry import (
-    DroidAgentFinalizeEvent,
-    DroidAgentInitEvent,
+    MobileAgentFinalizeEvent,
+    MobileAgentInitEvent,
     capture,
     flush,
 )
 from htb_agent.tools.driver.android import AndroidDriver
 from htb_agent.tools.driver.base import DeviceDisconnectedError
-from htb_agent.tools.driver.ios import IOSDriver
+from htb_agent.tools.driver.ios import IOSDriver, discover_ios_portal
 from htb_agent.tools.driver.recording import RecordingDriver
 from htb_agent.tools.driver.stealth import StealthDriver
+from htb_agent.tools.driver.visual_remote import (
+    VISUAL_REMOTE_CONNECTION,
+    VISUAL_REMOTE_DEFAULT_URL,
+    VisualRemoteDriver,
+)
 from htb_agent.tools.filters import ConciseFilter, DetailedFilter
 from htb_agent.tools.formatters import IndexedFormatter
 from htb_agent.tools.ui.ios_provider import IOSStateProvider
 from htb_agent.tools.ui.provider import AndroidStateProvider
+from htb_agent.tools.ui.screenshot_provider import ScreenshotOnlyStateProvider
 
 if TYPE_CHECKING:
     from htb_agent.tools.driver.base import DeviceDriver
@@ -102,20 +97,42 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("htb_agent")
 
+_COORDINATE_TOOL_NAMES = {"click_at", "click_area", "long_press_at"}
 
-class DroidAgent(Workflow):
+
+def _normalize_control_backend(control_backend: str | None) -> str | None:
+    if control_backend is None:
+        return None
+    normalized = control_backend.strip().lower()
+    return normalized or None
+
+
+def _force_screenshot_only_vision(agent_config: AgentConfig) -> None:
+    agent_config.vision_only = True
+    agent_config.manager.vision = True
+    agent_config.executor.vision = True
+    agent_config.fast_agent.vision = True
+
+
+def _effective_disabled_tools(disabled_tools: list[str], state_provider) -> list[str]:
+    if getattr(state_provider, "requires_coordinate_tools", False):
+        return [name for name in disabled_tools if name not in _COORDINATE_TOOL_NAMES]
+    return disabled_tools
+
+
+class MobileAgent(Workflow):
     """
     A wrapper class that coordinates between agents to achieve a user's goal.
 
     Reasoning modes:
-    - reasoning=False: Uses CodeActAgent directly for immediate execution
+    - reasoning=False: Uses FastAgent directly for immediate execution
     - reasoning=True: Uses ManagerAgent (planning) + ExecutorAgent (actions)
     """
 
     @staticmethod
     def _configure_default_logging(debug: bool = False):
         """
-        Configure default logging for DroidAgent if no real handler is present.
+        Configure default logging for MobileAgent if no real handler is present.
         """
         has_real_handler = any(
             not isinstance(h, logging.NullHandler) for h in logger.handlers
@@ -132,7 +149,7 @@ class DroidAgent(Workflow):
     def __init__(
         self,
         goal: str,
-        config: DroidrunConfig | None = None,
+        config: MobileConfig | None = None,
         llms: dict[str, LLM] | LLM | None = None,
         custom_tools: dict = None,
         credentials: Union[dict, "CredentialManager", None] = None,
@@ -147,7 +164,7 @@ class DroidAgent(Workflow):
     ):
         self.user_id = kwargs.pop("user_id", None)
         self.runtype = kwargs.pop("runtype", "developer")
-        self.shared_state = DroidAgentState(
+        self.shared_state = MobileAgentState(
             instruction=goal,
             err_to_manager_thresh=2,
             user_id=self.user_id,
@@ -179,7 +196,7 @@ class DroidAgent(Workflow):
 
         self.resolved_device_config = config.device if config else DeviceConfig()
 
-        self.config = DroidrunConfig(
+        self.config = MobileConfig(
             agent=config.agent if config else AgentConfig(),
             device=self.resolved_device_config,
             tools=config.tools if config else ToolsConfig(),
@@ -188,10 +205,18 @@ class DroidAgent(Workflow):
             telemetry=config.telemetry if config else TelemetryConfig(),
             llm_profiles=config.llm_profiles if config else {},
             credentials=config.credentials if config else CredentialsConfig(),
-            safe_execution=config.safe_execution if config else SafeExecutionConfig(),
             external_agents=config.external_agents if config else {},
             mcp=config.mcp if config else MCPConfig(),
         )
+        control_backend = _normalize_control_backend(
+            self.resolved_device_config.control_backend
+        )
+        if (
+            self.config.agent.vision_only
+            or control_backend == VISUAL_REMOTE_CONNECTION
+            or getattr(state_provider, "requires_coordinate_tools", False)
+        ):
+            _force_screenshot_only_vision(self.config.agent)
 
         # These are populated in start_handler (unless injected via __init__)
         self._injected_driver = driver
@@ -208,10 +233,13 @@ class DroidAgent(Workflow):
         setup_tracing(self.config.tracing, agent=self)
 
         # Check if using external agent - skip LLM loading
-        self._using_external_agent = self.config.agent.name != "htb_agent"
+        _BUILTIN_AGENT_NAMES = {"htb_agent", "droidrun"}
+        self._using_external_agent = self.config.agent.name not in _BUILTIN_AGENT_NAMES
 
-        self._stream_screenshots = os.environ.get(
-            "DROIDRUN_STREAM_SCREENSHOTS", ""
+        self._stream_screenshots = (
+            os.environ.get("MOBILERUN_STREAM_SCREENSHOTS")
+            or os.environ.get("DROIDRUN_STREAM_SCREENSHOTS")
+            or ""
         ).lower() in ("1", "true")
 
         self.timeout = timeout
@@ -249,9 +277,7 @@ class DroidAgent(Workflow):
                 self.manager_llm = llms.get("manager")
                 self.executor_llm = llms.get("executor")
                 self.fast_agent_llm = llms.get("fast_agent")
-                self.text_manipulator_llm = llms.get("text_manipulator")
                 self.app_opener_llm = llms.get("app_opener")
-                self.scripter_llm = llms.get("scripter", self.fast_agent_llm)
                 self.structured_output_llm = llms.get(
                     "structured_output", self.fast_agent_llm
                 )
@@ -259,21 +285,20 @@ class DroidAgent(Workflow):
                 self.manager_llm = llms
                 self.executor_llm = llms
                 self.fast_agent_llm = llms
-                self.text_manipulator_llm = llms
                 self.app_opener_llm = llms
-                self.scripter_llm = llms
                 self.structured_output_llm = llms
         else:
             logger.debug(f"🔄 Using external agent: {self.config.agent.name}")
             self.manager_llm = None
             self.executor_llm = None
             self.fast_agent_llm = None
-            self.text_manipulator_llm = None
             self.app_opener_llm = None
-            self.scripter_llm = None
             self.structured_output_llm = None
 
-        if self.config.logging.save_trajectory != "none":
+        if (
+            not self._using_external_agent
+            and self.config.logging.save_trajectory != "none"
+        ):
             self.trajectory = Trajectory(
                 goal=self.shared_state.instruction,
                 base_path=self.config.logging.trajectory_path,
@@ -320,53 +345,11 @@ class DroidAgent(Workflow):
             self.manager_agent = None
             self.executor_agent = None
 
-        atomic_tools = list(ATOMIC_ACTION_SIGNATURES.keys())
+        # Telemetry init event is fired in start_handler after registry is built.
+        self._init_prompts = prompts  # stash for telemetry
+        self._init_timeout = timeout
 
-        capture(
-            DroidAgentInitEvent(
-                goal=self.shared_state.instruction,
-                llms={
-                    "manager": (
-                        self.manager_llm.class_name() if self.manager_llm else "None"
-                    ),
-                    "executor": (
-                        self.executor_llm.class_name() if self.executor_llm else "None"
-                    ),
-                    "fast_agent": (
-                        self.fast_agent_llm.class_name()
-                        if self.fast_agent_llm
-                        else "None"
-                    ),
-                    "text_manipulator": (
-                        self.text_manipulator_llm.class_name()
-                        if self.text_manipulator_llm
-                        else "None"
-                    ),
-                    "app_opener": (
-                        self.app_opener_llm.class_name()
-                        if self.app_opener_llm
-                        else "None"
-                    ),
-                },
-                tools=",".join(atomic_tools + ["remember", "complete"]),
-                max_steps=self.config.agent.max_steps,
-                timeout=timeout,
-                vision={
-                    "manager": self.config.agent.manager.vision,
-                    "executor": self.config.agent.executor.vision,
-                    "fast_agent": self.config.agent.fast_agent.vision,
-                },
-                reasoning=self.config.agent.reasoning,
-                enable_tracing=self.config.tracing.enabled,
-                debug=self.config.logging.debug,
-                save_trajectories=self.config.logging.save_trajectory,
-                runtype=self.runtype,
-                custom_prompts=prompts,
-            ),
-            self.user_id,
-        )
-
-        logger.debug("✅ DroidAgent initialized successfully.")
+        logger.debug("✅ MobileAgent initialized successfully.")
 
     def run(self, *args, **kwargs) -> Awaitable[ResultEvent] | WorkflowHandler:
         apply_session_context()
@@ -382,28 +365,98 @@ class DroidAgent(Workflow):
         self, ctx: Context, ev: StartEvent
     ) -> FastAgentExecuteEvent | ManagerInputEvent:
         logger.info(
-            f"🚀 Running DroidAgent to achieve goal: {self.shared_state.instruction}"
+            f"🚀 Running MobileAgent to achieve goal: {self.shared_state.instruction}"
         )
         ctx.write_event_to_stream(ev)
 
         if self.trajectory_writer:
             await self.trajectory_writer.start()
 
+        # ── 0. External agent — early exit ────────────────────────────
+        if self._using_external_agent:
+            agent_name = self.config.agent.name
+
+            # Load the agent module
+            agent_module = load_agent(agent_name)
+            if not agent_module:
+                from htb_agent.agent.external import list_agents
+
+                available = list_agents()
+                if available:
+                    agents_str = ", ".join(available)
+                    raise ValueError(
+                        f"Failed to load external agent '{agent_name}'.\n"
+                        f"Available agents: {agents_str}"
+                    )
+                raise ValueError(
+                    f"External agent '{agent_name}' not found.\n"
+                    "No external agents are currently installed.\n"
+                    "Run: htb_agent run --help  to see available agents."
+                )
+
+            # Resolve config — missing section is fine, agent may use DEFAULT_CONFIG or env vars
+            agent_config = self.config.external_agents.get(agent_name) or {}
+            final_config = {**agent_module["config"], **agent_config}
+
+            # Resolve device serial and get raw AdbDevice
+            device_serial = self.resolved_device_config.serial
+            if device_serial is None:
+                devices = await adb.list()
+                if not devices:
+                    raise ValueError("No connected Android devices found.")
+                device_serial = devices[0].serial
+
+            adb_device = await adb.device(serial=device_serial)
+
+            logger.info(f"🤖 Using external agent: {agent_name}")
+
+            result = await agent_module["run"](
+                device=adb_device,
+                instruction=self.shared_state.instruction,
+                config=final_config,
+                max_steps=self.config.agent.max_steps,
+            )
+
+            return FinalizeEvent(success=result["success"], reason=result["reason"])
+
         # ── 1. Create driver ──────────────────────────────────────────
         if self.config.agent.reasoning:
-            vision_enabled = self.config.agent.manager.vision
+            vision_enabled = (
+                self.config.agent.vision_only or self.config.agent.manager.vision
+            )
         else:
-            vision_enabled = self.config.agent.fast_agent.vision
+            vision_enabled = (
+                self.config.agent.vision_only or self.config.agent.fast_agent.vision
+            )
 
         is_ios = self.resolved_device_config.platform.lower() == "ios"
+        control_backend = _normalize_control_backend(
+            self.resolved_device_config.control_backend
+        )
+        if control_backend and control_backend != VISUAL_REMOTE_CONNECTION:
+            raise ValueError(
+                "Unsupported device control backend "
+                f"'{self.resolved_device_config.control_backend}'. Supported: "
+                f"{VISUAL_REMOTE_CONNECTION}. Omit control backend for the "
+                "platform default."
+            )
+        is_visual_remote = control_backend == VISUAL_REMOTE_CONNECTION
 
         if self._injected_driver is not None:
             driver = self._injected_driver
+        elif is_visual_remote:
+            visual_remote_url = (
+                self.resolved_device_config.serial or VISUAL_REMOTE_DEFAULT_URL
+            )
+            driver = VisualRemoteDriver(
+                url=visual_remote_url,
+                device_id=self.resolved_device_config.device_id,
+            )
+            await driver.connect()
         elif is_ios:
             ios_url = self.resolved_device_config.serial
             if not ios_url:
-                raise ValueError("iOS device URL required in config.device.serial")
-            # TODO: bundle_identifiers not configurable yet
+                ios_url = await discover_ios_portal()
             driver = IOSDriver(url=ios_url)
             await driver.connect()
         else:
@@ -427,7 +480,7 @@ class DroidAgent(Workflow):
 
         # Wrap with StealthDriver if stealth mode enabled
         stealth_enabled = self.config.tools and self.config.tools.stealth
-        if stealth_enabled and not is_ios:
+        if stealth_enabled and not is_ios and not is_visual_remote:
             driver = StealthDriver(driver)
 
         # Wrap with RecordingDriver if trajectory saving enabled
@@ -436,10 +489,13 @@ class DroidAgent(Workflow):
                 driver = RecordingDriver(driver)
 
         self.driver = driver
+        self.shared_state.platform = driver.platform
 
         # ── 2. Create state provider ──────────────────────────────────
         if self._injected_state_provider is not None:
             self.state_provider = self._injected_state_provider
+        elif self.config.agent.vision_only or is_visual_remote:
+            self.state_provider = ScreenshotOnlyStateProvider(driver)
         elif is_ios:
             self.state_provider = IOSStateProvider(
                 driver,
@@ -457,52 +513,23 @@ class DroidAgent(Workflow):
             )
 
         # ── 3. Build tool registry ────────────────────────────────────
-        registry = ToolRegistry()
-
-        # 3a. Atomic tools (click, long_press, type, system_button, swipe, etc.)
-        registry.register_from_dict(ATOMIC_ACTION_SIGNATURES)
-
-        # 3b. open_app (always registered)
-        registry.register(
-            "open_app",
-            fn=open_app,
-            params={"text": {"type": "string", "required": True}},
-            description='Open an app by name or description. Usage: {"action": "open_app", "text": "Gmail"}',
-            deps={"start_app", "get_apps"},
-        )
-
-        # 3c. remember + complete (always registered, from DroidAgentState methods)
-        registry.register(
-            "remember",
-            fn=remember,
-            params={"information": {"type": "string", "required": True}},
-            description="Remember information for later use",
-        )
-        registry.register(
-            "complete",
-            fn=complete,
-            params={
-                "success": {"type": "boolean", "required": True},
-                "message": {"type": "string", "required": True},
-            },
-            description=(
-                "Mark task as complete. "
-                "success=true if task succeeded, false if failed. "
-                "message contains the result, answer, or explanation."
+        registry, standard_tool_names = await build_tool_registry(
+            supported_buttons=driver.supported_buttons,
+            credential_manager=self.credential_manager,
+            platform="ios" if driver.platform.lower() == "ios" else "android",
+            exact_app_launch=is_visual_remote,
+            screenshot_only=getattr(
+                self.state_provider,
+                "requires_coordinate_tools",
+                False,
             ),
         )
 
-        # 3d. type_secret (conditional)
-        if self.credential_manager:
-            credential_tools = await build_credential_tools(self.credential_manager)
-            if credential_tools:
-                registry.register_from_dict(credential_tools)
-
-        # 3e. User custom tools
+        # User custom tools
         if self.user_custom_tools:
             registry.register_from_dict(self.user_custom_tools)
 
-        # 3f. MCP tools
+        # MCP tools
         if self.config.mcp and self.config.mcp.enabled:
             self.mcp_manager = MCPClientManager(self.config.mcp)
             await self.mcp_manager.discover_tools()
@@ -510,20 +537,22 @@ class DroidAgent(Workflow):
             if mcp_tools:
                 registry.register_from_dict(mcp_tools)
 
-        # 3g. Disable unsupported tools based on driver + state provider capabilities
+        # Capability-based filtering (deps vs driver+provider supported)
         capabilities = driver.supported | self.state_provider.supported
         registry.disable_unsupported(capabilities)
 
-        # 3h. Disable tools from config
+        # Config-level filtering
         disabled_tools = (
             self.config.tools.disabled_tools
             if self.config.tools and self.config.tools.disabled_tools
             else []
         )
+        disabled_tools = _effective_disabled_tools(disabled_tools, self.state_provider)
         if disabled_tools:
             registry.disable(disabled_tools)
 
         self.registry = registry
+        self.standard_tool_names = standard_tool_names
 
         # ── 4. Create ActionContext ────────────────────────────────────
         self.action_ctx = ActionContext(
@@ -542,38 +571,52 @@ class DroidAgent(Workflow):
             self.manager_agent.state_provider = self.state_provider
             self.manager_agent.registry = self.registry
             self.manager_agent.save_trajectory = self.config.logging.save_trajectory
+            self.manager_agent.standard_tool_names = self.standard_tool_names
             self.executor_agent.registry = self.registry
             self.executor_agent.action_ctx = self.action_ctx
 
         # ── 6. Fetch device date once ─────────────────────────────────
         self.shared_state.device_date = await driver.get_date()
 
-        # ── 7. External agent mode ────────────────────────────────────
-        if self._using_external_agent:
-            agent_name = self.config.agent.name
-            agent_module = load_agent(agent_name)
-            if not agent_module:
-                raise ValueError(f"Failed to load external agent: {agent_name}")
-
-            agent_config = self.config.external_agents.get(agent_name)
-            if not agent_config:
-                raise ValueError(
-                    f"No config found for agent '{agent_name}' in external_agents section"
-                )
-
-            final_config = {**agent_module["config"], **agent_config}
-
-            logger.info(f"🤖 Using external agent: {agent_name}")
-
-            result = await agent_module["run"](
-                driver=self.driver,
-                action_ctx=self.action_ctx,
-                instruction=self.shared_state.instruction,
-                config=final_config,
+        # ── 7. Telemetry init event ───────────────────────────────────
+        capture(
+            MobileAgentInitEvent(
+                goal=self.shared_state.instruction,
+                llms={
+                    "manager": (
+                        self.manager_llm.class_name() if self.manager_llm else "None"
+                    ),
+                    "executor": (
+                        self.executor_llm.class_name() if self.executor_llm else "None"
+                    ),
+                    "fast_agent": (
+                        self.fast_agent_llm.class_name()
+                        if self.fast_agent_llm
+                        else "None"
+                    ),
+                    "app_opener": (
+                        self.app_opener_llm.class_name()
+                        if self.app_opener_llm
+                        else "None"
+                    ),
+                },
+                tools=",".join(sorted(standard_tool_names)),
                 max_steps=self.config.agent.max_steps,
-            )
-
-            return FinalizeEvent(success=result["success"], reason=result["reason"])
+                timeout=self._init_timeout,
+                vision={
+                    "manager": self.config.agent.manager.vision,
+                    "executor": self.config.agent.executor.vision,
+                    "fast_agent": self.config.agent.fast_agent.vision,
+                },
+                reasoning=self.config.agent.reasoning,
+                enable_tracing=self.config.tracing.enabled,
+                debug=self.config.logging.debug,
+                save_trajectories=self.config.logging.save_trajectory,
+                runtype=self.runtype,
+                custom_prompts=self._init_prompts,
+            ),
+            self.user_id,
+        )
 
         if self.config.logging.save_trajectory != "none":
             self.trajectory_writer.write(self.trajectory, stage="init")
@@ -592,49 +635,45 @@ class DroidAgent(Workflow):
         return event
 
     # ========================================================================
-    # execute_task — FastAgent / CodeActAgent
+    # External user message injection
+    # ========================================================================
+
+    def send_user_message(self, message: str) -> QueuedUserMessage:
+        queued = self.shared_state.queue_user_message(message)
+        logger.info(
+            f"📩 External user message queued [id={queued.id}] "
+            f"(queue length: {len(self.shared_state.pending_user_messages)})",
+            extra={"color": "cyan"},
+        )
+        return queued
+
+    # ========================================================================
+    # execute_task — FastAgent
     # ========================================================================
 
     @step
     async def execute_task(
         self, ctx: Context, ev: FastAgentExecuteEvent
     ) -> FastAgentResultEvent:
-        """Execute a single task using CodeActAgent or FastAgent."""
+        """Execute a single task using FastAgent."""
 
         logger.debug(f"🔧 Executing task: {ev.instruction}")
 
         try:
-            if self.config.agent.fast_agent.codeact:
-                agent = CodeActAgent(
-                    llm=self.fast_agent_llm,
-                    agent_config=self.config.agent,
-                    registry=self.registry,
-                    action_ctx=self.action_ctx,
-                    state_provider=self.state_provider,
-                    save_trajectory=self.config.logging.save_trajectory,
-                    debug=self.config.logging.debug,
-                    shared_state=self.shared_state,
-                    safe_execution_config=self.config.safe_execution,
-                    output_model=self.output_model,
-                    prompt_resolver=self.prompt_resolver,
-                    timeout=self.timeout,
-                    tracing_config=self.config.tracing,
-                )
-            else:
-                agent = FastAgent(
-                    llm=self.fast_agent_llm,
-                    agent_config=self.config.agent,
-                    registry=self.registry,
-                    action_ctx=self.action_ctx,
-                    state_provider=self.state_provider,
-                    save_trajectory=self.config.logging.save_trajectory,
-                    debug=self.config.logging.debug,
-                    shared_state=self.shared_state,
-                    output_model=self.output_model,
-                    prompt_resolver=self.prompt_resolver,
-                    timeout=self.timeout,
-                    tracing_config=self.config.tracing,
-                )
+            agent = FastAgent(
+                llm=self.fast_agent_llm,
+                agent_config=self.config.agent,
+                registry=self.registry,
+                action_ctx=self.action_ctx,
+                state_provider=self.state_provider,
+                save_trajectory=self.config.logging.save_trajectory,
+                debug=self.config.logging.debug,
+                shared_state=self.shared_state,
+                output_model=self.output_model,
+                prompt_resolver=self.prompt_resolver,
+                timeout=self.timeout,
+                tracing_config=self.config.tracing,
+            )
 
             handler = agent.run(
                 input=ev.instruction,
@@ -644,7 +683,7 @@ class DroidAgent(Workflow):
             async for nested_ev in handler.stream_events():
                 self.handle_stream_event(nested_ev, ctx)
 
-                if isinstance(nested_ev, (CodeActOutputEvent, FastAgentOutputEvent)):
+                if isinstance(nested_ev, FastAgentOutputEvent):
                     if self.config.logging.save_trajectory != "none":
                         self.trajectory_writer.write(
                             self.trajectory,
@@ -683,7 +722,7 @@ class DroidAgent(Workflow):
             return FinalizeEvent(success=ev.success, reason=ev.reason)
 
         except Exception as e:
-            logger.error(f"❌ Error during DroidAgent execution: {e}")
+            logger.error(f"❌ Error during MobileAgent execution: {e}")
             if self.config.logging.debug:
                 logger.error(traceback.format_exc())
             return FinalizeEvent(
@@ -702,6 +741,18 @@ class DroidAgent(Workflow):
         """Run Manager planning phase."""
         if self.shared_state.step_number >= self.config.agent.max_steps:
             logger.warning(f"⚠️ Reached maximum steps ({self.config.agent.max_steps})")
+            pending = self.shared_state.drain_user_messages()
+            if pending:
+                logger.warning(
+                    f"⚠️ Dropping {len(pending)} external user message(s) at max steps"
+                )
+                ctx.write_event_to_stream(
+                    ExternalUserMessageDroppedEvent(
+                        message_ids=[m.id for m in pending],
+                        reason="max_steps_reached",
+                        step_number=self.shared_state.step_number,
+                    )
+                )
             return FinalizeEvent(
                 success=False,
                 reason=f"Reached maximum steps ({self.config.agent.max_steps})",
@@ -736,143 +787,23 @@ class DroidAgent(Workflow):
     @step
     async def handle_manager_plan(
         self, ctx: Context, ev: ManagerPlanEvent
-    ) -> (
-        ExecutorInputEvent
-        | ScripterExecutorInputEvent
-        | FinalizeEvent
-        | TextManipulatorInputEvent
-    ):
+    ) -> ExecutorInputEvent | FinalizeEvent | ManagerInputEvent:
         """Process Manager output and decide next step."""
         # Check for answer-type termination
         if ev.answer.strip():
+            if self.shared_state.pending_user_messages:
+                logger.info(
+                    "⏸️ Manager tried to finish but external messages pending, "
+                    "looping back to Manager",
+                    extra={"color": "cyan"},
+                )
+                return ManagerInputEvent()
             success = ev.success if ev.success is not None else True
             self.shared_state.progress_summary = f"Answer: {ev.answer}"
             return FinalizeEvent(success=success, reason=ev.answer)
 
-        # Check for <script> tag
-        if "<script>" in ev.current_subgoal:
-            start_idx = ev.plan.find("<script>")
-            end_idx = ev.plan.find("</script>")
-
-            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                task = ev.plan[start_idx + len("<script>") : end_idx].strip()
-                logger.debug(f"🐍 Routing to ScripterAgent: {task[:80]}...")
-                event = ScripterExecutorInputEvent(task=task)
-                ctx.write_event_to_stream(event)
-                return event
-            else:
-                logger.warning(
-                    "⚠️ Found <script> in subgoal but not properly closed in plan, treating as regular subgoal"
-                )
-        if "TEXT_TASK" in ev.current_subgoal:
-            if self.config.agent.fast_agent.codeact:
-                return TextManipulatorInputEvent(
-                    task=ev.current_subgoal.replace("TEXT_TASK:", "")
-                    .replace("TEXT_TASK", "")
-                    .strip()
-                )
-            else:
-                logger.debug(
-                    "⚠️ TEXT_TASK in tools mode — routing to Executor instead of TextManipulator"
-                )
-                subgoal = (
-                    ev.current_subgoal.replace("TEXT_TASK:", "")
-                    .replace("TEXT_TASK", "")
-                    .strip()
-                )
-                return ExecutorInputEvent(current_subgoal=subgoal)
-
         logger.debug(f"▶️  Proceeding to Executor with subgoal: {ev.current_subgoal}")
         return ExecutorInputEvent(current_subgoal=ev.current_subgoal)
-
-    @step
-    async def run_text_manipulator(
-        self, ctx: Context, ev: TextManipulatorInputEvent
-    ) -> TextManipulatorResultEvent:
-        logger.debug(f"🔍 Running TextManipulatorAgent for task: {ev.task}")
-
-        if not self.shared_state.focused_text:
-            logger.warning("⚠️ No focused text available, using empty string")
-            current_text = ""
-        else:
-            current_text = self.shared_state.focused_text
-
-        try:
-            text_to_type, code_ran = await run_text_manipulation_agent(
-                instruction=self.shared_state.instruction,
-                current_subgoal=ev.task,
-                current_text=current_text,
-                overall_plan=self.shared_state.plan,
-                llm=self.text_manipulator_llm,
-                stream=self.config.agent.streaming,
-            )
-
-            return TextManipulatorResultEvent(
-                task=ev.task, text_to_type=text_to_type, code_ran=code_ran
-            )
-
-        except Exception as e:
-            logger.error(f"❌ TextManipulator agent failed: {e}")
-            if self.config.logging.debug:
-                logger.error(traceback.format_exc())
-
-            return TextManipulatorResultEvent(
-                task=ev.task, text_to_type="", code_ran=""
-            )
-
-    @step
-    async def handle_text_manipulator_result(
-        self, ctx: Context, ev: TextManipulatorResultEvent
-    ) -> ManagerInputEvent:
-        if not ev.text_to_type or not ev.text_to_type.strip():
-            logger.warning("⚠️ TextManipulator returned empty text, treating as no-op")
-            self.shared_state.last_summary = "Text manipulation returned empty result"
-            self.shared_state.action_outcomes.append(False)
-        else:
-            try:
-                success = await self.action_ctx.driver.input_text(
-                    ev.text_to_type, clear=True
-                )
-
-                if not success:
-                    logger.warning("⚠️ Text input may have failed")
-                    self.shared_state.last_summary = (
-                        "Text manipulation attempted but may have failed"
-                    )
-                    self.shared_state.action_outcomes.append(False)
-                else:
-                    logger.debug(
-                        f"✅ Text manipulator successfully typed {len(ev.text_to_type)} characters"
-                    )
-                    self.shared_state.last_summary = f"Text manipulation successful: typed {len(ev.text_to_type)} characters"
-                    self.shared_state.action_outcomes.append(True)
-            except Exception as e:
-                logger.error(f"❌ Error during text input: {e}")
-                self.shared_state.last_summary = f"Text manipulation error: {str(e)}"
-                self.shared_state.action_outcomes.append(False)
-
-        text_manipulation_record = {
-            "task": ev.task,
-            "code_ran": ev.code_ran,
-            "text_length": len(ev.text_to_type) if ev.text_to_type else 0,
-            "success": (
-                self.shared_state.action_outcomes[-1]
-                if self.shared_state.action_outcomes
-                else False
-            ),
-        }
-
-        self.shared_state.text_manipulation_history.append(text_manipulation_record)
-        self.shared_state.last_text_manipulation_success = text_manipulation_record[
-            "success"
-        ]
-
-        if self.config.logging.save_trajectory != "none":
-            self.trajectory_writer.write(
-                self.trajectory, stage=f"step_{self.shared_state.step_number}"
-            )
-
-        return ManagerInputEvent()
 
     @step
     async def run_executor(
@@ -929,77 +860,15 @@ class DroidAgent(Workflow):
         return ManagerInputEvent()
 
     # ========================================================================
-    # Script Executor Workflow Steps
-    # ========================================================================
-
-    @step
-    async def run_scripter(
-        self, ctx: Context, ev: ScripterExecutorInputEvent
-    ) -> ScripterExecutorResultEvent:
-        """Instantiate and run ScripterAgent for off-device operations."""
-        logger.debug(f"🐍 Starting ScripterAgent for task: {ev.task[:2000]}...")
-
-        scripter_agent = ScripterAgent(
-            llm=self.scripter_llm,
-            agent_config=self.config.agent,
-            shared_state=self.shared_state,
-            task=ev.task,
-            safe_execution_config=self.config.safe_execution,
-            timeout=self.timeout,
-        )
-
-        handler = scripter_agent.run()
-
-        async for nested_ev in handler.stream_events():
-            self.handle_stream_event(nested_ev, ctx)
-
-        result = await handler
-
-        script_record = {
-            "task": ev.task,
-            "message": result["message"],
-            "success": result["success"],
-            "code_executions": result.get("code_executions", 0),
-        }
-        self.shared_state.scripter_history.append(script_record)
-        self.shared_state.last_scripter_message = result["message"]
-        self.shared_state.last_scripter_success = result["success"]
-
-        return ScripterExecutorResultEvent(
-            task=ev.task,
-            message=result["message"],
-            success=result["success"],
-            code_executions=result.get("code_executions", 0),
-        )
-
-    @step
-    async def handle_scripter_result(
-        self, ctx: Context, ev: ScripterExecutorResultEvent
-    ) -> ManagerInputEvent:
-        """Process ScripterAgent result and loop back to Manager."""
-        if ev.success:
-            logger.debug(
-                f"✅ Script completed successfully in {ev.code_executions} steps"
-            )
-        else:
-            logger.warning(f"⚠️ Script failed or reached max steps: {ev.message}")
-
-        if self.config.logging.save_trajectory != "none":
-            self.trajectory_writer.write(
-                self.trajectory, stage=f"step_{self.shared_state.step_number}"
-            )
-
-        return ManagerInputEvent()
-
-    # ========================================================================
     # Finalize
     # ========================================================================
 
     @step
     async def finalize(self, ctx: Context, ev: FinalizeEvent) -> ResultEvent:
+        self.shared_state.workflow_completed = True
         ctx.write_event_to_stream(ev)
         capture(
-            DroidAgentFinalizeEvent(
+            MobileAgentFinalizeEvent(
                 success=ev.success,
                 reason=ev.reason,
                 steps=self.shared_state.step_number,
@@ -1050,7 +919,7 @@ class DroidAgent(Workflow):
                 if self.config.logging.debug:
                     logger.error(traceback.format_exc())
 
-        # Capture final screenshot (independent of trajectory persistence)
+        # Capture final screenshot and UI state (independent of trajectory persistence)
         vision_any = (
             self.config.agent.manager.vision
             or self.config.agent.executor.vision
@@ -1075,6 +944,15 @@ class DroidAgent(Workflow):
                     logger.debug("📸 Final screenshot captured")
             except Exception as e:
                 logger.warning(f"Failed to capture final screenshot: {e}")
+
+            try:
+                ui_state = await self.state_provider.get_state()
+                ctx.write_event_to_stream(
+                    RecordUIStateEvent(ui_state=ui_state.elements)
+                )
+                logger.debug("📋 Final UI state captured")
+            except Exception as e:
+                logger.warning(f"Failed to capture final UI state: {e}")
 
         # Save trajectory to disk
         if self.config.logging.save_trajectory != "none":
@@ -1113,3 +991,7 @@ class DroidAgent(Workflow):
                     self.trajectory.ui_states.append(ev.ui_state)
                 else:
                     self.trajectory.events.append(ev)
+
+
+# Legacy alias — deprecated, will be removed in v0.8.0
+DroidAgent = MobileAgent

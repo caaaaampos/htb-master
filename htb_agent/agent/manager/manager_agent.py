@@ -28,6 +28,7 @@ from opentelemetry import trace
 from pydantic import BaseModel
 
 from htb_agent.agent.common.events import RecordUIStateEvent, ScreenshotEvent
+from htb_agent.agent.droid.events import ExternalUserMessageAppliedEvent
 from htb_agent.agent.manager.events import (
     ManagerContextEvent,
     ManagerPlanDetailsEvent,
@@ -38,7 +39,6 @@ from htb_agent.agent.usage import get_usage_from_response
 from htb_agent.agent.utils.chat_utils import filter_empty_messages
 from htb_agent.agent.utils.inference import acall_with_retries
 from htb_agent.agent.utils.prompt_resolver import PromptResolver
-from htb_agent.agent.utils.signatures import ATOMIC_ACTION_SIGNATURES
 from htb_agent.agent.utils.tracing_setup import record_langfuse_screenshot
 from htb_agent.app_cards.app_card_provider import AppCardProvider
 from htb_agent.app_cards.providers import (
@@ -48,10 +48,11 @@ from htb_agent.app_cards.providers import (
 )
 from htb_agent.config_manager.prompt_loader import PromptLoader
 from htb_agent.tools.driver.base import DeviceDisconnectedError
+from htb_agent.tools.helpers.images import resize_image_to_max_side_with_grid
 
 if TYPE_CHECKING:
     from htb_agent.agent.action_context import ActionContext
-    from htb_agent.agent.droid import DroidAgentState
+    from htb_agent.agent.droid import MobileAgentState
     from htb_agent.agent.tool_registry import ToolRegistry
     from htb_agent.config_manager.config_manager import AgentConfig, TracingConfig
     from htb_agent.tools.ui.provider import StateProvider
@@ -77,7 +78,7 @@ class ManagerAgent(Workflow):
         action_ctx: "ActionContext | None",
         state_provider: "StateProvider | None",
         save_trajectory: str = "none",
-        shared_state: "DroidAgentState" = None,
+        shared_state: "MobileAgentState" = None,
         agent_config: "AgentConfig" = None,
         registry: "ToolRegistry | None" = None,
         output_model: Type[BaseModel] | None = None,
@@ -92,8 +93,10 @@ class ManagerAgent(Workflow):
         self.action_ctx = action_ctx
         self.state_provider = state_provider
         self.save_trajectory = save_trajectory
-        self._stream_screenshots = os.environ.get(
-            "DROIDRUN_STREAM_SCREENSHOTS", ""
+        self._stream_screenshots = (
+            os.environ.get("MOBILERUN_STREAM_SCREENSHOTS")
+            or os.environ.get("DROIDRUN_STREAM_SCREENSHOTS")
+            or ""
         ).lower() in ("1", "true")
         self.shared_state = shared_state
         self.registry = registry
@@ -102,6 +105,7 @@ class ManagerAgent(Workflow):
         self.app_card_config = self.agent_config.app_cards
         self.prompt_resolver = prompt_resolver or PromptResolver()
         self.tracing_config = tracing_config
+        self.standard_tool_names: set[str] | None = None
 
         # Initialize app card provider
         self.app_card_provider: AppCardProvider = self._initialize_app_card_provider()
@@ -157,7 +161,7 @@ class ManagerAgent(Workflow):
                 app_cards_dir=self.app_card_config.app_cards_dir
             )
 
-    async def _build_system_prompt(self, has_text_to_modify: bool) -> str:
+    async def _build_system_prompt(self) -> str:
         """Build system prompt with all context."""
         # Build error history if needed
         error_history = None
@@ -173,9 +177,14 @@ class ManagerAgent(Workflow):
                 )
             ]
 
-        # Get available secrets
+        # Get available secrets (only if type_secret is actually in the registry)
         available_secrets = []
-        if self.action_ctx and self.action_ctx.credential_manager:
+        if (
+            self.registry
+            and "type_secret" in self.registry.tools
+            and self.action_ctx
+            and self.action_ctx.credential_manager
+        ):
             available_secrets = await self.action_ctx.credential_manager.get_keys()
 
         # Output schema if provided
@@ -184,11 +193,10 @@ class ManagerAgent(Workflow):
             output_schema = self.output_model.model_json_schema()
 
         # Build custom tools descriptions from registry.
-        # Exclude standard atomic actions (Manager prompt already describes them)
-        # and flow-control tools (remember, complete) which Manager doesn't use.
+        # Exclude standard tools (already described in the prompt template).
         custom_tools_descriptions = ""
         if self.registry:
-            _standard = set(ATOMIC_ACTION_SIGNATURES.keys()) | {"remember", "complete"}
+            _standard = self.standard_tool_names or set()
             custom_tools_descriptions = self.registry.get_tool_descriptions_text(
                 exclude=_standard
             )
@@ -199,14 +207,11 @@ class ManagerAgent(Workflow):
             "app_card": self.shared_state.app_card,
             "important_notes": "",  # TODO: implement
             "error_history": error_history,
-            "text_manipulation_enabled": has_text_to_modify
-            and self.agent_config.fast_agent.codeact,
             "custom_tools_descriptions": custom_tools_descriptions,
-            "scripter_execution_enabled": self.agent_config.scripter.enabled,
-            "scripter_max_steps": self.agent_config.scripter.max_steps,
             "available_secrets": available_secrets,
             "variables": self.shared_state.custom_variables,
             "output_schema": output_schema,
+            "platform": self.shared_state.platform,
         }
 
         custom_prompt = self.prompt_resolver.get_prompt("manager_system")
@@ -285,20 +290,9 @@ class ManagerAgent(Workflow):
 
             # Add screenshot if vision enabled
             if screenshot and self.vision:
+                if getattr(self.state_provider, "requires_coordinate_tools", False):
+                    screenshot = resize_image_to_max_side_with_grid(screenshot)
                 messages[last_user_idx].blocks.append(ImageBlock(image=screenshot))
-
-            # Add script result if available
-            if self.shared_state.last_scripter_message:
-                status = (
-                    "SUCCESS" if self.shared_state.last_scripter_success else "FAILED"
-                )
-                script_context = (
-                    f'\n<script_result status="{status}">\n'
-                    f"{self.shared_state.last_scripter_message}\n"
-                    f"</script_result>\n"
-                )
-                messages[last_user_idx].blocks.append(TextBlock(text=script_context))
-                self.shared_state.last_scripter_message = ""
 
             # Add previous device state to second-to-last user message
             if len(user_indices) >= 2:
@@ -386,6 +380,30 @@ class ManagerAgent(Workflow):
         """Gather context and prepare manager prompt."""
         logger.debug("💬 Preparing manager context...")
 
+        # Capture screenshot if needed
+        screenshot = None
+        if self.vision or self._stream_screenshots or self.save_trajectory != "none":
+            try:
+                screenshot = await self.action_ctx.driver.screenshot()
+
+                if screenshot:
+                    ctx.write_event_to_stream(ScreenshotEvent(screenshot=screenshot))
+                    parent_span = trace.get_current_span()
+                    record_langfuse_screenshot(
+                        screenshot,
+                        parent_span=parent_span,
+                        screenshots_enabled=bool(
+                            self.tracing_config
+                            and self.tracing_config.langfuse_screenshots
+                        ),
+                        vision_enabled=self.vision,
+                    )
+                    logger.debug("📸 Screenshot captured for Manager")
+            except DeviceDisconnectedError:
+                raise
+            except Exception as e:
+                logger.warning(f"Failed to capture screenshot: {e}")
+
         # Get and format device state
         ui_state = await self.state_provider.get_state()
         self.action_ctx.ui = ui_state
@@ -421,40 +439,30 @@ class ManagerAgent(Workflow):
         else:
             self.shared_state.app_card = ""
 
-        # Capture screenshot if needed
-        screenshot = None
-        if self.vision or self._stream_screenshots or self.save_trajectory != "none":
-            try:
-                screenshot = await self.action_ctx.driver.screenshot()
-
-                if screenshot:
-                    ctx.write_event_to_stream(ScreenshotEvent(screenshot=screenshot))
-                    parent_span = trace.get_current_span()
-                    record_langfuse_screenshot(
-                        screenshot,
-                        parent_span=parent_span,
-                        screenshots_enabled=bool(
-                            self.tracing_config
-                            and self.tracing_config.langfuse_screenshots
-                        ),
-                        vision_enabled=self.vision,
-                    )
-                    logger.debug("📸 Screenshot captured for Manager")
-            except DeviceDisconnectedError:
-                raise
-            except Exception as e:
-                logger.warning(f"Failed to capture screenshot: {e}")
-
-        # Detect text manipulation mode
-        focused_text_clean = self.shared_state.focused_text.replace("'", "").strip()
-        has_text_to_modify = focused_text_clean != ""
-
-        # Store for next step
-        self.shared_state.has_text_to_modify = has_text_to_modify
         self.shared_state.screenshot = screenshot
 
         # Build user message and add to history
         user_content = self._build_user_message_content()
+
+        drained = self.shared_state.drain_user_messages()
+        if drained:
+            external_block = "\n".join(
+                f"<external_user_message>\n{m.message}\n</external_user_message>"
+                for m in drained
+            )
+            user_content += "\n" + external_block + "\n"
+            logger.info(
+                f"📩 Applied {len(drained)} external user message(s)",
+                extra={"color": "cyan"},
+            )
+            ctx.write_event_to_stream(
+                ExternalUserMessageAppliedEvent(
+                    message_ids=[m.id for m in drained],
+                    consumer="manager",
+                    step_number=self.shared_state.step_number,
+                )
+            )
+
         self.shared_state.message_history.append(
             ChatMessage(role="user", content=user_content)
         )
@@ -470,11 +478,10 @@ class ManagerAgent(Workflow):
         """Get LLM response."""
         logger.debug("🧠 Manager thinking about the plan...")
 
-        has_text_to_modify = self.shared_state.has_text_to_modify
         screenshot = self.shared_state.screenshot
 
         # Build system prompt
-        system_prompt = await self._build_system_prompt(has_text_to_modify)
+        system_prompt = await self._build_system_prompt()
 
         # Build messages with context
         messages = self._build_messages_with_context(

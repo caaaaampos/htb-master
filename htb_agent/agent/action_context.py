@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from htb_agent.agent.droid.state import DroidAgentState
+    from htb_agent.agent.droid.state import MobileAgentState
     from htb_agent.credential_manager import CredentialManager
     from htb_agent.tools.driver.base import DeviceDriver
     from htb_agent.tools.ui.provider import StateProvider
@@ -23,7 +23,7 @@ class ActionContext:
         self,
         driver: "DeviceDriver",
         ui: "Optional[UIState]",
-        shared_state: "DroidAgentState",
+        shared_state: "MobileAgentState",
         state_provider: "StateProvider",
         app_opener_llm=None,
         credential_manager: "Optional[CredentialManager]" = None,

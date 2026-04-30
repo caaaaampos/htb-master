@@ -6,6 +6,7 @@ from htb_agent.tools.driver.cloud import CloudDriver
 from htb_agent.tools.driver.ios import IOSDriver
 from htb_agent.tools.driver.recording import RecordingDriver
 from htb_agent.tools.driver.stealth import StealthDriver
+from htb_agent.tools.driver.visual_remote import VisualRemoteDriver
 
 __all__ = [
     "DeviceDisconnectedError",
@@ -15,4 +16,5 @@ __all__ = [
     "IOSDriver",
     "RecordingDriver",
     "StealthDriver",
+    "VisualRemoteDriver",
 ]

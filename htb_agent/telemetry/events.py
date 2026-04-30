@@ -16,8 +16,8 @@ class TelemetryEvent(BaseModel):
     pass
 
 
-class DroidAgentInitEvent(TelemetryEvent):
-    """Event captured when DroidAgent is initialized."""
+class MobileAgentInitEvent(TelemetryEvent):
+    """Event captured when MobileAgent is initialized."""
 
     goal: str
     llms: Dict[str, str]
@@ -43,11 +43,16 @@ class PackageVisitEvent(TelemetryEvent):
     step_number: int
 
 
-class DroidAgentFinalizeEvent(TelemetryEvent):
-    """Event captured when DroidAgent execution completes."""
+class MobileAgentFinalizeEvent(TelemetryEvent):
+    """Event captured when MobileAgent execution completes."""
 
     success: bool
     reason: str
     steps: int
     unique_packages_count: int
     unique_activities_count: int
+
+
+# Legacy aliases — deprecated, will be removed in v0.8.0
+DroidAgentInitEvent = MobileAgentInitEvent
+DroidAgentFinalizeEvent = MobileAgentFinalizeEvent

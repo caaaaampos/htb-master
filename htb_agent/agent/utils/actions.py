@@ -23,6 +23,60 @@ logger = logging.getLogger("htb_agent")
 # ---------------------------------------------------------------------------
 
 
+def _uses_screenshot_only_coordinates(ctx: "ActionContext") -> bool:
+    return bool(getattr(ctx.state_provider, "requires_coordinate_tools", False))
+
+
+def _screenshot_only_coordinate_error(ctx: "ActionContext") -> str:
+    width = getattr(ctx.ui, "screen_width", None)
+    height = getattr(ctx.ui, "screen_height", None)
+    if width and height:
+        return (
+            f"Coordinates must be inside the screenshot size {width}x{height} "
+            "in screenshot-only mode. Observe the screenshot and retry with "
+            "pixel coordinates inside the image."
+        )
+    return (
+        "Coordinates must be inside the screenshot bounds in screenshot-only mode. "
+        "Observe the screenshot and retry with pixel coordinates inside the image."
+    )
+
+
+def _validate_screenshot_only_point(
+    x: int | float, y: int | float, *, ctx: "ActionContext"
+) -> None:
+    if not _uses_screenshot_only_coordinates(ctx):
+        return
+    try:
+        width = float(ctx.ui.screen_width)
+        height = float(ctx.ui.screen_height)
+        px = float(x)
+        py = float(y)
+    except TypeError as exc:
+        raise ValueError(_screenshot_only_coordinate_error(ctx)) from exc
+    except ValueError as exc:
+        raise ValueError(_screenshot_only_coordinate_error(ctx)) from exc
+
+    out_of_range = (
+        width <= 0
+        or height <= 0
+        or px < 0
+        or px >= width
+        or py < 0
+        or py >= height
+    )
+    if out_of_range:
+        raise ValueError(_screenshot_only_coordinate_error(ctx))
+
+
+def _convert_action_point(
+    x: int | float, y: int | float, *, ctx: "ActionContext"
+) -> tuple[int, int]:
+    _validate_screenshot_only_point(x, y, ctx=ctx)
+    abs_x, abs_y = ctx.ui.convert_point(x, y)
+    return int(round(abs_x)), int(round(abs_y))
+
+
 async def click(index: int, *, ctx: "ActionContext") -> ActionResult:
     """Click the element with the given index."""
     try:
@@ -65,7 +119,7 @@ async def long_press(index: int, *, ctx: "ActionContext") -> ActionResult:
 async def long_press_at(x: int, y: int, *, ctx: "ActionContext") -> ActionResult:
     """Long press at screen coordinates."""
     try:
-        abs_x, abs_y = ctx.ui.convert_point(x, y)
+        abs_x, abs_y = _convert_action_point(x, y, ctx=ctx)
         await ctx.driver.swipe(abs_x, abs_y, abs_x, abs_y, 1000)
         return ActionResult(success=True, summary=f"Long pressed at ({abs_x}, {abs_y})")
     except Exception as e:
@@ -77,7 +131,7 @@ async def long_press_at(x: int, y: int, *, ctx: "ActionContext") -> ActionResult
 async def click_at(x: int, y: int, *, ctx: "ActionContext") -> ActionResult:
     """Click at screen coordinates."""
     try:
-        abs_x, abs_y = ctx.ui.convert_point(x, y)
+        abs_x, abs_y = _convert_action_point(x, y, ctx=ctx)
         await ctx.driver.tap(abs_x, abs_y)
         return ActionResult(success=True, summary=f"Tapped at ({abs_x}, {abs_y})")
     except Exception as e:
@@ -89,8 +143,10 @@ async def click_area(
 ) -> ActionResult:
     """Click center of area."""
     try:
+        _validate_screenshot_only_point(x1, y1, ctx=ctx)
+        _validate_screenshot_only_point(x2, y2, ctx=ctx)
         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-        abs_x, abs_y = ctx.ui.convert_point(cx, cy)
+        abs_x, abs_y = _convert_action_point(cx, cy, ctx=ctx)
         await ctx.driver.tap(abs_x, abs_y)
         return ActionResult(
             success=True, summary=f"Tapped center of area at ({abs_x}, {abs_y})"
@@ -99,7 +155,7 @@ async def click_area(
         return ActionResult(success=False, summary=f"Failed to tap area center: {e}")
 
 
-async def type(
+async def type_text(
     text: str, index: int, clear: bool = False, *, ctx: "ActionContext"
 ) -> ActionResult:
     """Type text into the element with the given index."""
@@ -122,27 +178,32 @@ async def type(
         return ActionResult(success=False, summary=f"Failed to type text: {e}")
 
 
+async def type_text_direct(
+    text: str, clear: bool = False, *, ctx: "ActionContext"
+) -> ActionResult:
+    """Type text into the currently focused input."""
+    try:
+        success = await ctx.driver.input_text(text, clear)
+        if success:
+            return ActionResult(
+                success=True, summary=f"Text typed successfully (clear={clear})"
+            )
+        return ActionResult(success=False, summary="Failed to type text: input failed")
+    except Exception as e:
+        return ActionResult(success=False, summary=f"Failed to type text: {e}")
+
+
 async def system_button(button: str, *, ctx: "ActionContext") -> ActionResult:
     """Press a system button (back, home, or enter)."""
-    button_map = {"back": 4, "home": 3, "enter": 66}
-    button_lower = button.lower()
-
-    if button_lower not in button_map:
-        return ActionResult(
-            success=False,
-            summary=f"Failed to press {button} button: unknown button. Valid options: back, home, enter",
-        )
-
-    keycode = button_map[button_lower]
-    key_names = {66: "ENTER", 4: "BACK", 3: "HOME"}
-    key_name = key_names.get(keycode, str(keycode))
-
     try:
-        await ctx.driver.press_key(keycode)
-        return ActionResult(success=True, summary=f"Pressed {key_name} button")
+        await ctx.driver.press_button(button)
+        return ActionResult(success=True, summary=f"Pressed {button.upper()} button")
+    except ValueError as e:
+        return ActionResult(success=False, summary=str(e))
     except Exception as e:
         return ActionResult(
-            success=False, summary=f"Failed to press {key_name} button: {e}"
+            success=False,
+            summary=f"Failed to press {button} button: {e.__class__.__name__}: {e}",
         )
 
 
@@ -166,8 +227,8 @@ async def swipe(
         )
 
     try:
-        start_x, start_y = ctx.ui.convert_point(*coordinate)
-        end_x, end_y = ctx.ui.convert_point(*coordinate2)
+        start_x, start_y = _convert_action_point(*coordinate, ctx=ctx)
+        end_x, end_y = _convert_action_point(*coordinate2, ctx=ctx)
         duration_ms = int(duration * 1000)
         await ctx.driver.swipe(start_x, start_y, end_x, end_y, duration_ms=duration_ms)
         return ActionResult(
@@ -187,7 +248,7 @@ async def open_app(text: str, *, ctx: "ActionContext") -> ActionResult:
         )
 
     workflow = AppStarter(
-        tools=ctx.driver,
+        driver=ctx.driver,
         llm=ctx.app_opener_llm,
         timeout=60,
         stream=ctx.streaming,
@@ -200,6 +261,40 @@ async def open_app(text: str, *, ctx: "ActionContext") -> ActionResult:
     if isinstance(result, str) and "could not open app" in result.lower():
         return ActionResult(success=False, summary=result)
     return ActionResult(success=True, summary=str(result))
+
+
+async def open_bundle_id(
+    bundle_id: str | None = None,
+    app_id: str | None = None,
+    *,
+    ctx: "ActionContext",
+) -> ActionResult:
+    """Open an app by exact package name, app id, or iOS bundle identifier."""
+    identifier = app_id or bundle_id
+    if not identifier:
+        return ActionResult(
+            success=False,
+            summary="Failed to open app: exact app identifier is required.",
+        )
+
+    hint = (
+        "Maybe you got the wrong app identifier. You could try using swipes and "
+        "search to find the app."
+    )
+    try:
+        result = await ctx.driver.start_app(identifier)
+        await asyncio.sleep(1)
+        if isinstance(result, str) and result.lower().startswith("failed"):
+            return ActionResult(
+                success=False,
+                summary=f"Failed to open app '{identifier}': {result}\n{hint}",
+            )
+        return ActionResult(success=True, summary=str(result))
+    except Exception as e:
+        return ActionResult(
+            success=False,
+            summary=f"Failed to open app '{identifier}': {e.__class__.__name__}: {e}\n{hint}",
+        )
 
 
 async def wait(duration: float = 1.0, *, ctx: "ActionContext") -> ActionResult:

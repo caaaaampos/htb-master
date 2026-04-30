@@ -43,12 +43,23 @@ PROTECTED=(
     "CONTRIBUTING.md"
     "Dockerfile"
     ".dockerignore"
+    ".gitignore"
     "static/htb-agent.png"
     "pyproject.toml"
     "uv.lock"
     "${LOCAL_PKG}/__init__.py"
     "${LOCAL_PKG}/config_example.yaml"
     "${LOCAL_PKG}/portal.py"           # Portal repo/package/IME identity is brand-sensitive
+    "${LOCAL_PKG}/agent/droid/__init__.py" # Public compatibility aliases
+    "${LOCAL_PKG}/agent/utils/tracing_setup.py" # Telemetry/span naming is brand-sensitive
+    "${LOCAL_PKG}/config_manager/config_manager.py" # Legacy config fields/aliases
+    "${LOCAL_PKG}/config_manager/__init__.py"
+    "${LOCAL_PKG}/config_manager/loader.py" # User config path/env var identity
+    "${LOCAL_PKG}/config_manager/credential_paths.py"
+    "${LOCAL_PKG}/mcp/adapter.py"      # Public HTB Agent helper names
+    "${LOCAL_PKG}/mcp/__init__.py"
+    "${LOCAL_PKG}/telemetry/tracker.py"
+    "${LOCAL_PKG}/telemetry/langfuse_processor.py"
     "${LOCAL_PKG}/tools/android/portal_client.py"
     "${LOCAL_PKG}/tools/driver/ios.py" # iOS bundle ids are app-identity sensitive
     "${LOCAL_PKG}/tools/driver/cloud.py" # External SDK/API endpoint; review manually
@@ -133,6 +144,7 @@ apply_rename() {
         s/logging\.getLogger\("\Q$u\E"\)/logging.getLogger("$l")/g;
         s/logging\.getLogger\("\Q$u\E-/logging.getLogger("$l-/g;
         s/version\("\Q$u\E"\)/version("hackthebox-agent")/g;
+        s/mcp_to_mobilerun_tools/mcp_to_htb_agent_tools/g;
         s/\bMobilerun\b/HTB Agent/g;
         s/\bMobileRun\b/HTB Agent/g;
         s/(?<![\.\/\w-])\Q$u\E(?![.\w-])/$l/g;
@@ -140,6 +152,7 @@ apply_rename() {
         s/'\''\.\Q$u\E'\''/'\''.$l'\''/g;
         s#https://docs\.mobilerun\.ai#https://docs.hackthebox.com#g;
         s#https://github\.com/droidrun/mobilerun/blob/main/mobilerun/config_example\.yaml#https://github.com/hackthebox/hackthebox-agent/blob/main/htb_agent/config_example.yaml#g;
+        s#/usr/share/\Q$u\E#/usr/share/$l#g;
     ' "$file"
 }
 

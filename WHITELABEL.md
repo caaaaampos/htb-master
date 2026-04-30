@@ -148,7 +148,7 @@ El upstream actual cambió `pyproject.toml`. Como tu `pyproject.toml` está prot
 | `llama-index-llms-openai>=0.6.0` | Subir si adoptas cambios nuevos |
 | `llama-index-llms-openai-like>=0.6.0` | Subir si adoptas cambios nuevos |
 | `mobilerun-sdk>=3.1.0` | Preferir pin/rango explícito |
-| `deepseek` extra no aparece upstream | Mantener si es parte de tu distribución |
+| `deepseek` extra no aparece upstream | Mantener como extra vacío; el runtime lo enruta por `OpenAILike` |
 | `python-dotenv` no aparece upstream | Mantener si tus scripts/server lo usan |
 
 ---

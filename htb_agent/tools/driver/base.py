@@ -21,9 +21,13 @@ class DeviceDriver:
     Every method raises ``NotImplementedError`` by default.
     Concrete drivers override the methods they support and declare them
     in the ``supported`` class-level set.
+
+    ``platform`` identifies the device type (e.g. "Android", "iOS").
     """
 
+    platform: str = "Android"
     supported: set[str] = set()
+    supported_buttons: set[str] = set()
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -52,15 +56,24 @@ class DeviceDriver:
         """Swipe from (x1, y1) to (x2, y2)."""
         raise NotImplementedError
 
-    async def input_text(self, text: str, clear: bool = False) -> bool:
+    async def input_text(
+        self,
+        text: str,
+        clear: bool = False,
+        stealth: bool = False,
+        wpm: int = 0,
+    ) -> bool:
         """Type *text* into the currently focused field.
 
         Returns ``True`` on success, ``False`` on failure.
         """
         raise NotImplementedError
 
-    async def press_key(self, keycode: int) -> None:
-        """Send a single key-event."""
+    async def press_button(self, button: str) -> None:
+        """Press a named button (e.g. back, home, enter).
+
+        Raises ``ValueError`` if *button* is not in ``supported_buttons``.
+        """
         raise NotImplementedError
 
     async def drag(
@@ -103,6 +116,20 @@ class DeviceDriver:
         Returns raw PNG bytes.
         """
         raise NotImplementedError
+
+    async def input_coordinate_size(
+        self,
+        screenshot_width: int,
+        screenshot_height: int,
+    ) -> tuple[int, int]:
+        """Return the coordinate size expected by input methods.
+
+        Most backends accept screenshot pixel coordinates, so the default input
+        coordinate size matches the captured screenshot. Backends whose input
+        layer uses a different coordinate system, such as XCTest points on iOS,
+        override this method.
+        """
+        return screenshot_width, screenshot_height
 
     async def get_ui_tree(self) -> Dict[str, Any]:
         """Return the raw UI / accessibility tree from the device."""

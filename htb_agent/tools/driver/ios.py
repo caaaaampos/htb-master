@@ -2,20 +2,15 @@
 
 Wraps the iOS portal HTTP API (running on the device) to provide device I/O
 through the same ``DeviceDriver`` interface used by Android.
-
-Known limitations (pre-existing, documented as TODOs):
-- ``clear`` parameter in ``input_text`` is ignored
-- ``press_key`` only maps HOME; BACK and ENTER have no iOS equivalent
-- ``get_date`` not available (no iOS portal endpoint)
-- ``drag`` not implemented
-- ``get_apps`` returns bundle identifiers, not real app metadata
-- Screen dimensions inferred from element bounds (no portal endpoint)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -23,68 +18,150 @@ from htb_agent.tools.driver.base import DeviceDriver
 
 logger = logging.getLogger("htb_agent")
 
-SYSTEM_BUNDLE_IDENTIFIERS = [
-    "ai.htb_agent.htb_agent-ios-portal",
-    "com.apple.Bridge",
-    "com.apple.DocumentsApp",
-    "com.apple.Fitness",
-    "com.apple.Health",
-    "com.apple.Maps",
-    "com.apple.MobileAddressBook",
-    "com.apple.MobileSMS",
-    "com.apple.Passbook",
-    "com.apple.Passwords",
-    "com.apple.Preferences",
-    "com.apple.PreviewShell",
-    "com.apple.mobilecal",
-    "com.apple.mobilesafari",
-    "com.apple.mobileslideshow",
-    "com.apple.news",
-    "com.apple.reminders",
-    "com.apple.shortcuts",
-    "com.apple.webapp",
-]
-
-# Android keycode → iOS keycode translation.
-# Only HOME is mapped; others have no iOS equivalent.
-_ANDROID_TO_IOS_KEYCODE = {
-    3: 0,  # HOME
-    # TODO: 4 (BACK) has no iOS equivalent
-    # TODO: 66 (ENTER) has no iOS equivalent
+SYSTEM_APP_LABELS = {
+    "ai.htb_agent.htb_agent-ios-portal": "HTB Agent Portal",
+    "com.apple.Bridge": "Watch",
+    "com.apple.DocumentsApp": "Files",
+    "com.apple.Fitness": "Fitness",
+    "com.apple.Health": "Health",
+    "com.apple.Maps": "Maps",
+    "com.apple.MobileAddressBook": "Contacts",
+    "com.apple.MobileSMS": "Messages",
+    "com.apple.Passbook": "Wallet",
+    "com.apple.Passwords": "Passwords",
+    "com.apple.Preferences": "Settings",
+    "com.apple.PreviewShell": "Freeform",
+    "com.apple.mobilecal": "Calendar",
+    "com.apple.mobilesafari": "Safari",
+    "com.apple.mobileslideshow": "Photos",
+    "com.apple.news": "News",
+    "com.apple.reminders": "Reminders",
+    "com.apple.shortcuts": "Shortcuts",
+    "com.apple.webapp": "Web App",
 }
+
+IOS_PORTAL_DEFAULT_PORT = 6643
+IOS_PORTAL_SCAN_RANGE = 10
+IOS_STATE_TIMEOUT_SECONDS = 4.0
+IOS_STATE_HTTP_TIMEOUT_SECONDS = 6.0
+
+
+def validate_ios_portal_url(url: str) -> str:
+    """Validate and normalize an iOS portal base URL."""
+    normalized = url.rstrip("/")
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(
+            "iOS device must be the portal base URL, e.g. http://127.0.0.1:6643"
+        )
+    return normalized
+
+
+async def discover_ios_portal(
+    host: str = "127.0.0.1",
+    start_port: int = IOS_PORTAL_DEFAULT_PORT,
+    scan_range: int = IOS_PORTAL_SCAN_RANGE,
+    timeout: float = 1.0,
+) -> str:
+    """Auto-discover the iOS portal by scanning a small port range."""
+
+    async def _probe(client: httpx.AsyncClient, port: int) -> Optional[str]:
+        url = f"http://{host}:{port}"
+        try:
+            resp = await client.get(f"{url}/device/date")
+            if resp.status_code == 200 and "date" in resp.json():
+                return url
+        except Exception:
+            pass
+        return None
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        result = await _probe(client, start_port)
+        if result:
+            logger.info(f"iOS portal found at {result}")
+            return result
+
+        results = await asyncio.gather(
+            *[_probe(client, p) for p in range(start_port + 1, start_port + scan_range)]
+        )
+        for result in results:
+            if result is not None:
+                logger.info(f"iOS portal found at {result}")
+                return result
+
+    raise ConnectionError(
+        f"Could not find iOS portal on {host} "
+        f"(scanned ports {start_port}-{start_port + scan_range - 1}). "
+        "Make sure the HTB Agent Portal app is running and iproxy is forwarding the port."
+    )
+
+
+def _humanize_bundle_identifier(bundle_id: str) -> str:
+    mapped = SYSTEM_APP_LABELS.get(bundle_id)
+    if mapped:
+        return mapped
+
+    last_segment = bundle_id.rsplit(".", 1)[-1]
+    words = re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\b)|\d+", last_segment)
+    if words:
+        return " ".join(words)
+    return last_segment or bundle_id
+
+
+def _infer_ios_point_size(pixel_width: int, pixel_height: int) -> tuple[int, int]:
+    """Best-effort fallback when portal screen bounds are temporarily unavailable."""
+    for scale in (3, 2):
+        point_width = pixel_width / scale
+        point_height = pixel_height / scale
+        if 250 <= point_width <= 600 and 500 <= point_height <= 1300:
+            return int(round(point_width)), int(round(point_height))
+    return pixel_width, pixel_height
 
 
 class IOSDriver(DeviceDriver):
     """iOS device driver communicating via HTTP REST to the iOS portal app."""
 
+    platform = "iOS"
+
     supported = {
         "tap",
         "swipe",
         "input_text",
-        "press_key",
+        "press_button",
         "start_app",
         "screenshot",
         "get_ui_tree",
         "list_packages",
         "get_apps",
+        "get_date",
     }
+
+    supported_buttons = {"home"}
 
     def __init__(
         self,
         url: str,
         bundle_identifiers: Optional[List[str]] = None,
     ) -> None:
-        self.url = url.rstrip("/")
+        self.url = validate_ios_portal_url(url)
         self.bundle_identifiers = bundle_identifiers or []
         self._client: Optional[httpx.AsyncClient] = None
-        self._last_tapped_rect: Optional[str] = None
         self._connected = False
-
-    # -- lifecycle -----------------------------------------------------------
+        self._input_coordinate_sizes: dict[tuple[int, int], tuple[int, int]] = {}
 
     async def connect(self) -> None:
         self._client = httpx.AsyncClient(base_url=self.url, timeout=30.0)
-        # TODO: verify URL is reachable (ping /vision/state or similar)
+        try:
+            resp = await self._client.get("/device/date")
+            resp.raise_for_status()
+        except Exception as exc:
+            await self._client.aclose()
+            self._client = None
+            raise ConnectionError(
+                f"Could not connect to iOS portal at {self.url}. "
+                "Make sure the HTB Agent Portal app is running on the device "
+                "and the URL/port is correct."
+            ) from exc
         self._connected = True
         logger.info(f"Connected to iOS device at {self.url}")
 
@@ -92,13 +169,8 @@ class IOSDriver(DeviceDriver):
         if not self._connected:
             await self.connect()
 
-    # -- input actions -------------------------------------------------------
-
     async def tap(self, x: int, y: int) -> None:
         ios_rect = f"{{{{{x},{y}}},{{{1},{1}}}}}"
-        # Store for input_text (iOS API requires a rect for typing)
-        # TODO: stores center point as 1x1 rect, not full element bounds
-        self._last_tapped_rect = f"{x},{y},1,1"
         resp = await self._client.post(
             "/gestures/tap",
             json={"rect": ios_rect, "count": 1, "longPress": False},
@@ -108,36 +180,41 @@ class IOSDriver(DeviceDriver):
     async def swipe(
         self, x1: int, y1: int, x2: int, y2: int, duration_ms: float = 1000
     ) -> None:
-        # iOS API is direction-based, not coordinate-based
-        dx, dy = x2 - x1, y2 - y1
-        if abs(dx) > abs(dy):
-            direction = "right" if dx > 0 else "left"
-        else:
-            direction = "down" if dy > 0 else "up"
         resp = await self._client.post(
             "/gestures/swipe",
-            json={"x": float(x1), "y": float(y1), "dir": direction},
+            json={
+                "x1": float(x1),
+                "y1": float(y1),
+                "x2": float(x2),
+                "y2": float(y2),
+                "durationMs": float(duration_ms),
+            },
         )
         resp.raise_for_status()
 
-    async def input_text(self, text: str, clear: bool = False) -> bool:
-        # TODO: clear not supported on iOS portal
-        rect = self._last_tapped_rect or "0,0,100,100"
+    async def input_text(
+        self,
+        text: str,
+        clear: bool = False,
+        stealth: bool = False,
+        wpm: int = 0,
+    ) -> bool:
         resp = await self._client.post(
-            "/inputs/type", json={"rect": rect, "text": text}
+            "/inputs/type", json={"text": text, "clear": clear}
         )
         return resp.status_code == 200
 
-    async def press_key(self, keycode: int) -> None:
-        ios_keycode = _ANDROID_TO_IOS_KEYCODE.get(keycode)
-        if ios_keycode is None:
-            # TODO: BACK (4) and ENTER (66) have no iOS equivalent
-            logger.warning(f"Keycode {keycode} not supported on iOS, ignoring")
-            return
-        resp = await self._client.post("/inputs/key", json={"key": ios_keycode})
-        resp.raise_for_status()
-
-    # -- app management ------------------------------------------------------
+    async def press_button(self, button: str) -> None:
+        await self.ensure_connected()
+        button_lower = button.lower()
+        if button_lower not in self.supported_buttons:
+            raise ValueError(
+                f"Button '{button}' not supported on iOS. "
+                f"Supported: {', '.join(sorted(self.supported_buttons))}"
+            )
+        if button_lower == "home":
+            resp = await self._client.post("/inputs/key", json={"key": 1})
+            resp.raise_for_status()
 
     async def start_app(self, package: str, activity: Optional[str] = None) -> str:
         resp = await self._client.post(
@@ -148,53 +225,64 @@ class IOSDriver(DeviceDriver):
         return f"Failed to launch {package}: HTTP {resp.status_code}"
 
     async def get_apps(self, include_system: bool = True) -> List[Dict[str, str]]:
-        # TODO: iOS portal has no app listing endpoint.
-        # Returns bundle identifiers as both package and label.
         all_ids: set[str] = set(self.bundle_identifiers)
         if include_system:
-            all_ids.update(SYSTEM_BUNDLE_IDENTIFIERS)
-        return [{"package": bid, "label": bid} for bid in sorted(all_ids)]
+            all_ids.update(SYSTEM_APP_LABELS)
+        return [
+            {"package": bid, "label": _humanize_bundle_identifier(bid)}
+            for bid in sorted(all_ids)
+        ]
 
     async def list_packages(self, include_system: bool = False) -> List[str]:
         apps = await self.get_apps(include_system)
         return [a["package"] for a in apps]
-
-    # -- state / observation -------------------------------------------------
 
     async def screenshot(self, hide_overlay: bool = True) -> bytes:
         resp = await self._client.get("/vision/screenshot")
         resp.raise_for_status()
         return resp.content
 
+    async def input_coordinate_size(
+        self,
+        screenshot_width: int,
+        screenshot_height: int,
+    ) -> tuple[int, int]:
+        """Return XCTest point dimensions for portal input actions."""
+        key = (screenshot_width, screenshot_height)
+        cached = self._input_coordinate_sizes.get(key)
+        if cached is not None:
+            return cached
+
+        try:
+            state = await self.get_ui_tree()
+            bounds = (state.get("device_context") or {}).get("screen_bounds") or {}
+            width = int(round(float(bounds.get("width", 0))))
+            height = int(round(float(bounds.get("height", 0))))
+            if width > 0 and height > 0:
+                self._input_coordinate_sizes[key] = (width, height)
+                return width, height
+        except Exception as exc:
+            logger.debug("Could not read iOS input coordinate size from /state: %s", exc)
+
+        width, height = _infer_ios_point_size(screenshot_width, screenshot_height)
+        self._input_coordinate_sizes[key] = (width, height)
+        return width, height
+
     async def get_ui_tree(self) -> Dict[str, Any]:
-        """Return raw iOS accessibility data and phone state.
-
-        Returns a dict with:
-        - ``a11y_raw``: the raw accessibility tree text from the portal
-        - ``phone_state``: dict with ``current_activity`` and ``keyboard_shown``
-        """
-        a11y_resp = await self._client.get("/vision/a11y")
-        a11y_resp.raise_for_status()
-        a11y_data = a11y_resp.json()
-
-        state_resp = await self._client.get("/vision/state")
-        if state_resp.status_code == 200:
-            state_data = state_resp.json()
-            phone_state = {
-                "currentApp": state_data.get("activity", "Unknown"),
-                "keyboardVisible": state_data.get("keyboardShown", False),
-            }
-        else:
-            phone_state = {
-                "currentApp": "Unknown",
-                "keyboardVisible": False,
-            }
-
-        return {
-            "a11y_raw": a11y_data["accessibilityTree"],
-            "phone_state": phone_state,
-        }
+        """Return unified state from the iOS portal."""
+        resp = await self._client.get(
+            "/state",
+            params={"timeout": str(IOS_STATE_TIMEOUT_SECONDS)},
+            timeout=IOS_STATE_HTTP_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+        try:
+            return resp.json()
+        except Exception as e:
+            raise ValueError(f"Invalid response from /state: {e}") from e
 
     async def get_date(self) -> str:
-        # TODO: not available on iOS portal
+        resp = await self._client.get("/device/date")
+        if resp.status_code == 200:
+            return resp.json().get("date", "")
         return ""

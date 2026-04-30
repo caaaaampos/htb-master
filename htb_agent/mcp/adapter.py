@@ -50,6 +50,11 @@ def mcp_to_htb_agent_tools(mcp_manager: "MCPClientManager") -> dict[str, dict[st
     return custom_tools
 
 
+def mcp_to_mobilerun_tools(mcp_manager: "MCPClientManager") -> dict[str, dict[str, Any]]:
+    """Compatibility alias for upstream naming."""
+    return mcp_to_htb_agent_tools(mcp_manager)
+
+
 def _create_tool_wrapper(tool_name: str, manager: "MCPClientManager"):
     """Create async wrapper function for an MCP tool."""
 
@@ -68,3 +73,7 @@ def _create_tool_wrapper(tool_name: str, manager: "MCPClientManager"):
 
     mcp_tool_wrapper.__name__ = f"mcp_{tool_name}"
     return mcp_tool_wrapper
+
+
+# Legacy alias — deprecated, will be removed in v0.8.0
+mcp_to_droidrun_tools = mcp_to_htb_agent_tools
